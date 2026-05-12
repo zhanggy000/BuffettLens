@@ -261,7 +261,3 @@ BuffettLens/
 ### 为什么 ETN 这种好公司分数低？
 
 可能不是公司差，而是估值贵。例如 Forward PE、PEG、FCF Yield、P/FCF 都不满足价值标准时，估值模块会拖低总分。
-
-### 为什么 TSM 分数被修正？
-
-TSM 是 ADR，股价/市值是 USD，财报是 TWD。旧算法曾把 TWD 的 FCF 和 USD 市值直接相除，导致 FCF Yield 虚高。现在已修正：币种不一致时不计算 FCF Yield/P-FCF。
