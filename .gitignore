@@ -41,6 +41,10 @@ Desktop.ini
 # Stock data exports (don't commit personal queries)
 stock_data_*.json
 
+# Generated screener outputs and cache
+reports/
+screener/cache/
+
 # Jupyter
 .ipynb_checkpoints/
 
