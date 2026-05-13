@@ -203,8 +203,8 @@ Each run gets its own folder, so old Markdown reports and summary CSVs are prese
 Create a simulated portfolio from any BuffettLens report folder:
 
 ```powershell
-python create_portfolio.py --report-dir reports/20260513_150501_ndx100_limit80_score60 --min-score 75 --cash 100000 --method equal
-python create_portfolio.py --report-dir reports/20260513_150501_ndx100_limit80_score60 --min-score 75 --cash 100000 --method score_weighted
+python create_portfolio.py --report-dir reports/20260513_150501_ndx100_limit80_score60 --min-score 75 --cash 100000 --currency USD --method equal
+python create_portfolio.py --report-dir reports/20260513_150501_ndx100_limit80_score60 --min-score 75 --cash 100000 --currency USD --method score_weighted
 ```
 
 Allocation methods:
@@ -231,7 +231,8 @@ portfolios/{portfolio_name}/history.csv
 portfolios/{portfolio_name}/latest.md
 ```
 
-`history.csv` compares portfolio return with SPY and QQQ. This is a simulated fractional-share portfolio; no currency conversion is applied.
+`history.csv` compares portfolio return with SPY and QQQ. This is a simulated fractional-share portfolio.
+`--currency` is the base cash currency and defaults to `USD`. A-shares are treated as `CNY`, US stocks as `USD`; FX rates are fetched from Yahoo Finance and recorded in the portfolio tables.
 
 ---
 

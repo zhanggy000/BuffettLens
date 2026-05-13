@@ -362,6 +362,7 @@ def save_summary_csv(rows: List[Dict[str, Any]], suffix: str = "", output_dir: P
 
     fields = [
         "rank", "ticker", "name", "sector", "total_score",
+        "currency", "financial_currency", "data_source",
         "buffett_score", "strength_score", "growth_score", "valuation_score",
         "moat_score", "technical_score",
         "market_cap", "current_price",

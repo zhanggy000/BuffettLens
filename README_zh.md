@@ -199,8 +199,8 @@ reports/
 从任意 BuffettLens 报告目录创建模拟组合:
 
 ```powershell
-python create_portfolio.py --report-dir reports/20260513_150501_ndx100_limit80_score60 --min-score 75 --cash 100000 --method equal
-python create_portfolio.py --report-dir reports/20260513_150501_ndx100_limit80_score60 --min-score 75 --cash 100000 --method score_weighted
+python create_portfolio.py --report-dir reports/20260513_150501_ndx100_limit80_score60 --min-score 75 --cash 100000 --currency USD --method equal
+python create_portfolio.py --report-dir reports/20260513_150501_ndx100_limit80_score60 --min-score 75 --cash 100000 --currency USD --method score_weighted
 ```
 
 分配方式:
@@ -227,7 +227,7 @@ portfolios/{组合名}/history.csv
 portfolios/{组合名}/latest.md
 ```
 
-`history.csv` 会对比组合收益、SPY 收益、QQQ 收益。它是模拟小数股组合,不做汇率换算。
+`history.csv` 会对比组合收益、SPY 收益、QQQ 收益。它是模拟小数股组合。`--currency` 是你的本金货币,默认 `USD`。A 股按 `CNY` 计价,美股按 `USD` 计价;脚本会从 Yahoo Finance 获取汇率,并写入持仓表和报告。
 
 ---
 
