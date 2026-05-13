@@ -152,9 +152,9 @@ The main entry point now supports full CSI 300 directly:
 python -m screener.run_screener --universe csi300
 ```
 
-CSI 300 uses `data/000300closeweight.xls` by default. You can override it with the `CSI300_WEIGHT_XLS` environment variable.
+CSI 300 uses `data/000300closeweight.xls` by default. Optionally, set `CSI300_WEIGHT_XLS` to point at a different CSI 300 weight file for one run. If the Excel file is missing or unreadable, BuffettLens falls back to the hard-coded `CSI300_FALLBACK` ticker list.
 
-`run_csi300_top50.py` is kept as a legacy top-N helper. It reads `C:\Users\EDY\Downloads\000300closeweight.xls` (the CSI 300 weight file you can download from the CSI Index website) and scores the top 50 by weight.
+`run_csi300_top50.py` is kept as a legacy top-N helper. It reads `data/000300closeweight.xls` and scores the top 50 by weight.
 
 **Windows**
 ```powershell
@@ -163,7 +163,7 @@ python run_csi300_top50.py
 
 **macOS / Linux**
 
-Edit the `XLS` constant at the top of `run_csi300_top50.py` to your local path, then:
+Run the same command from the repo root:
 ```bash
 python run_csi300_top50.py
 ```

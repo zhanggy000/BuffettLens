@@ -144,13 +144,13 @@ python -m screener.run_screener --universe all
 --all-reports        即便未过硬门槛或分数低也生成报告(调试用)
 ```
 
-`csi300` 默认读取仓库内 `data/000300closeweight.xls`。如需使用其他路径,可设置 `CSI300_WEIGHT_XLS` 环境变量。
+`csi300` 默认读取仓库内 `data/000300closeweight.xls`。如需临时使用另一份沪深300权重表,可设置 `CSI300_WEIGHT_XLS` 环境变量。Excel 文件缺失或读取失败时,会回退到代码内置的 `CSI300_FALLBACK` ticker 列表。
 
 ---
 
 ## 场景 4 — 跑沪深 300 前 N 大权重
 
-入口:`run_csi300_top50.py`。它读取 `C:\Users\EDY\Downloads\000300closeweight.xls`(中证指数官网可下载),按权重排序后跑前 50 只。
+入口:`run_csi300_top50.py`。它读取 `data/000300closeweight.xls`,按权重排序后跑前 50 只。
 
 **Windows**
 ```powershell
@@ -159,7 +159,7 @@ python run_csi300_top50.py
 
 **macOS / Linux**
 
-打开 `run_csi300_top50.py`,把顶部的 `XLS` 常量改成本机路径,然后:
+在仓库根目录直接运行:
 ```bash
 python run_csi300_top50.py
 ```

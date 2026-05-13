@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from screener import fetcher, metrics as M, scorer as S, reporter
 from screener.ashare_fetcher import _parse_code
 
-XLS = r"C:\Users\EDY\Downloads\000300closeweight.xls"
+XLS = Path(__file__).resolve().parent / "data" / "000300closeweight.xls"
 TOP_N = 50
 CN_10Y = 1.7  # 中国10年期国债收益率近似 (2026 年中位水平)
 
