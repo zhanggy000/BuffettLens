@@ -26,9 +26,11 @@
 
 import argparse
 import csv
+import re
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -43,6 +45,10 @@ from . import scorer
 from .universe import get_universe
 
 
+def progress(message: str) -> None:
+    print(f"[progress] {message}", flush=True)
+
+
 def resolve_universes(universe_names: List[str]) -> Tuple[List[str], List[Dict[str, str]]]:
     """Expand universes, preserving first occurrence and recording skipped duplicates."""
     seen = set()
@@ -50,7 +56,10 @@ def resolve_universes(universe_names: List[str]) -> Tuple[List[str], List[Dict[s
     duplicates: List[Dict[str, str]] = []
 
     for universe_name in universe_names:
+        progress(f"loading universe: {universe_name}")
+        t0 = time.time()
         universe_tickers = get_universe(universe_name)
+        progress(f"loaded {universe_name}: {len(universe_tickers)} tickers ({time.time() - t0:.1f}s)")
         for ticker in universe_tickers:
             ticker = ticker.strip().upper()
             if not ticker:
@@ -63,7 +72,7 @@ def resolve_universes(universe_names: List[str]) -> Tuple[List[str], List[Dict[s
 
     if len(universe_names) > 1 or duplicates:
         raw_count = len(tickers) + len(duplicates)
-        print(
+        progress(
             f"Universe merge: raw={raw_count}, unique={len(tickers)}, "
             f"duplicates_skipped={len(duplicates)}"
         )
@@ -71,12 +80,30 @@ def resolve_universes(universe_names: List[str]) -> Tuple[List[str], List[Dict[s
     return tickers, duplicates
 
 
-def save_universe_duplicates(duplicates: List[Dict[str, str]]):
+def _safe_label_part(value: str) -> str:
+    value = re.sub(r"[^A-Za-z0-9_.+-]+", "-", value.strip())
+    return value.strip("-") or "run"
+
+
+def _fmt_condition_number(value: float) -> str:
+    return str(int(value)) if float(value).is_integer() else str(value).replace(".", "p")
+
+
+def build_report_dir(source_label: str, limit: int, min_score: float) -> Path:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    limit_label = f"limit{limit}" if limit > 0 else "limitall"
+    score_label = f"score{_fmt_condition_number(min_score)}"
+    dirname = "_".join([timestamp, _safe_label_part(source_label), limit_label, score_label])
+    path = reporter.REPORTS_DIR / dirname
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def save_universe_duplicates(duplicates: List[Dict[str, str]], output_dir: Path):
     if not duplicates:
         return None
-    reporter.REPORTS_DIR.mkdir(exist_ok=True)
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    path = reporter.REPORTS_DIR / f"_universe_duplicates_{date_str}.csv"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / f"{output_dir.name}_universe_duplicates.csv"
     with path.open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=["ticker", "skipped_from"])
         writer.writeheader()
@@ -85,24 +112,24 @@ def save_universe_duplicates(duplicates: List[Dict[str, str]]):
 
 
 def run(tickers: List[str], delay: float = 2.0, force_refresh: bool = False,
-        min_score: float = 0, all_reports: bool = False) -> None:
+        min_score: float = 0, all_reports: bool = False, output_dir: Path = None) -> None:
+    output_dir = output_dir or build_report_dir("tickers", len(tickers), min_score)
+    progress(f"processing {len(tickers)} tickers")
     print(f"\n{'=' * 60}")
     print(f"  BuffettLens 价值股筛选器")
     print(f"{'=' * 60}")
     print(f"  目标: {len(tickers)} 只股票")
     print(f"  请求间隔: {delay} 秒")
     print(f"  最低评分: {min_score} (低于此分不生成报告)")
+    print(f"  报告目录: {output_dir}")
     print(f"{'=' * 60}\n")
 
-    removed = reporter.clear_report_markdown()
-    if removed:
-        print(f"  已清理旧 Markdown 报告: {removed} 个\n")
-
     # 获取10年期国债收益率 (按 ticker 市场自动区分: 美股=^TNX, A股=中国10Y)
+    progress("fetching 10Y bond yields")
     print("  获取 10年期国债收益率...")
     treasury_us = fetcher.get_10y_treasury_yield()
     treasury_cn = fetcher._CN_10Y_DEFAULT
-    print(f"  US 10Y: {treasury_us:.2f}%   CN 10Y: {treasury_cn:.2f}%\n")
+    print(f"  US 10Y: {treasury_us:.2f}%   CN 10Y: {treasury_cn:.2f}%\n", flush=True)
 
     summary_rows = []
     passed_count = 0
@@ -168,7 +195,7 @@ def run(tickers: List[str], delay: float = 2.0, force_refresh: bool = False,
             # 生成报告
             should_report = (passed and total >= min_score) or all_reports
             if should_report:
-                path = reporter.save_report(m, scoring)
+                path = reporter.save_report(m, scoring, output_dir=output_dir)
                 stars, _ = scorer.rating_stars(total)
                 print(f"✓ {total:5.1f}分 {stars}  → {path.name}")
                 passed_count += 1
@@ -191,7 +218,7 @@ def run(tickers: List[str], delay: float = 2.0, force_refresh: bool = False,
             time.sleep(0.1 if cached else delay)
 
     # 保存总览CSV
-    csv_path = reporter.save_summary_csv(summary_rows)
+    csv_path = reporter.save_summary_csv(summary_rows, output_dir=output_dir)
 
     elapsed = time.time() - t_start
     print(f"\n{'=' * 60}")
@@ -201,7 +228,7 @@ def run(tickers: List[str], delay: float = 2.0, force_refresh: bool = False,
     print(f"  未通过 / 分数过低: {failed_count}")
     print(f"  抓取/计算错误: {error_count}")
     print(f"  总览CSV: {csv_path}")
-    print(f"  报告目录: {reporter.REPORTS_DIR}")
+    print(f"  报告目录: {output_dir}")
     print(f"{'=' * 60}\n")
 
     # Top 10 提示
@@ -235,25 +262,38 @@ def main():
                    help="限制处理数量 (用于测试, 0=不限)")
 
     args = p.parse_args()
+    progress(
+        "starting run: "
+        f"universe={'+'.join(args.universe) if not args.tickers else 'custom-tickers'}, "
+        f"limit={args.limit or 'all'}, min_score={args.min_score}, delay={args.delay}"
+    )
 
     if args.tickers:
         tickers = [t.strip().upper() for t in args.tickers.split(",") if t.strip()]
         duplicates = []
+        source_label = "tickers"
+        progress(f"loaded custom tickers: {len(tickers)}")
     else:
         tickers, duplicates = resolve_universes(args.universe)
-        duplicate_path = save_universe_duplicates(duplicates)
-        if duplicate_path:
-            print(f"Duplicate universe tickers skipped: {duplicate_path}")
+        source_label = "+".join(args.universe)
 
     if args.limit > 0:
+        before_limit = len(tickers)
         tickers = tickers[:args.limit]
+        progress(f"applied limit: {args.limit} of {before_limit} unique tickers")
 
     if not tickers:
         print("❌ 股票列表为空")
         sys.exit(1)
 
+    output_dir = build_report_dir(source_label, args.limit, args.min_score)
+    progress(f"created report folder: {output_dir}")
+    duplicate_path = save_universe_duplicates(duplicates, output_dir)
+    if duplicate_path:
+        progress(f"duplicate tickers skipped file: {duplicate_path}")
+
     run(tickers, delay=args.delay, force_refresh=args.force_refresh,
-        min_score=args.min_score, all_reports=args.all_reports)
+        min_score=args.min_score, all_reports=args.all_reports, output_dir=output_dir)
 
 
 if __name__ == "__main__":

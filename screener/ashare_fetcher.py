@@ -16,8 +16,12 @@ import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-import akshare as ak
 import pandas as pd
+
+try:
+    import akshare as ak
+except ImportError:
+    ak = None
 
 
 # ---------- ticker 解析 ----------
@@ -57,7 +61,16 @@ _spot_ts: float = 0
 _SPOT_TTL = 600  # 10 分钟
 
 
+def _require_akshare() -> None:
+    if ak is None:
+        raise ImportError(
+            "akshare is required only for the A-share fallback data source. "
+            "Install it with: python -m pip install akshare"
+        )
+
+
 def _get_spot_map() -> Dict[str, Dict[str, Any]]:
+    _require_akshare()
     """Sina 全A实时快照, 返回 {sina_symbol -> {name, price, ...}}."""
     global _spot_cache, _spot_ts
     now = time.time()
@@ -108,6 +121,7 @@ def _row_by_indicator(df: pd.DataFrame, indicator_name: str) -> Optional[pd.Seri
 # ---------- 主抓取 ----------
 
 def fetch_ashare(ticker: str) -> Optional[Dict[str, Any]]:
+    _require_akshare()
     code, exch, sina_sym = _parse_code(ticker)
 
     # 1) 实时 (name + price) — 走 Sina 全市场快照, 一次缓存全部

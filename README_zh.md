@@ -136,7 +136,7 @@ python -m screener.run_screener --universe ndx100 sp500 csi300
 python -m screener.run_screener --universe all
 ```
 
-传入多个股票池时,BuffettLens 会保留每个 ticker 第一次出现的位置,重复成分股会跳过不重复跑。重复记录会写入 `reports/_universe_duplicates_YYYY-MM-DD.csv`。
+传入多个股票池时,BuffettLens 会保留每个 ticker 第一次出现的位置,重复成分股会跳过不重复跑。重复记录会写入本次运行的报告目录。
 
 常用参数:
 ```text
@@ -169,22 +169,20 @@ python run_csi300.py --limit 50
 python run_csi300.py --limit 80
 ```
 
-雪球速度很快 — 50 只大约 45 秒。输出:
-- `reports/csi300_top50_scored.csv` — 总览表,带 `data_source` 列
-- `reports/{分数}_{代码}_{名称}.md` — 单股报告
+雪球速度很快 — 50 只大约 45 秒。
 
 ---
 
 ## 输出文件在哪
 
-所有脚本都写入 `reports/`:
+所有脚本都会在 `reports/` 下新建一个本次运行目录,不会清空旧报告:
 
 ```
 reports/
-├── _summary_2026-05-13.csv         # 批次总览(按分数降序)
-├── 075.0_000651.SZ_格力电器.md      # 单股报告
-├── 072.0_NVDA_NVIDIA_Corporation.md
-└── ...
+└── 20260513_150501_ndx100_limit80_score60/
+    ├── 20260513_150501_ndx100_limit80_score60_summary.csv
+    ├── 085.0_ADBE_Adobe_Inc.md
+    └── ...
 ```
 
 每份 Markdown 报告底部一行注明数据源,例如:
@@ -192,7 +190,7 @@ reports/
 *数据源: 雪球 xueqiu.com (A股主源)*
 ```
 
-`reports/*.md` 在每次 `screener.run_screener` 运行前会被清空,避免不同批次混在一起。`_summary_*.csv` 不会清。
+目录名格式为 `生成时间_市场_limitN_scoreN`,例如 `20260513_150501_ndx100_limit80_score60`。
 
 ---
 

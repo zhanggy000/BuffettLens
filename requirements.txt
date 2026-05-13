@@ -2,8 +2,7 @@ yfinance>=0.2.40
 lxml>=5.0.0
 pandas>=2.0.0
 requests>=2.31.0
-# A 股数据源 (兜底, 主源是 xueqiu HTTP API, 无需 SDK)
+# A-share fallback data source. Primary A-share source is xueqiu HTTP API.
 akshare>=1.13.0
-# akshare 读 .xls 时需要
-xlrd>=2.0.1
+# Required for reading .xls CSI 300 files.
 xlrd>=2.0.1

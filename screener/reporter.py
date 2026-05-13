@@ -12,15 +12,6 @@ REPORTS_DIR = Path(__file__).resolve().parent.parent / "reports"
 REPORTS_DIR.mkdir(exist_ok=True)
 
 
-def clear_report_markdown() -> int:
-    """Remove previously generated per-stock Markdown reports."""
-    removed = 0
-    for path in REPORTS_DIR.glob("*.md"):
-        path.unlink()
-        removed += 1
-    return removed
-
-
 def _fmt_value(v, fmt: str) -> str:
     if v is None:
         return "N/A"
@@ -344,22 +335,26 @@ def gen_report(m: Dict[str, Any], scoring: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def save_report(m: Dict[str, Any], scoring: Dict[str, Any]) -> Path:
+def save_report(m: Dict[str, Any], scoring: Dict[str, Any], output_dir: Path = None) -> Path:
+    out_dir = output_dir or REPORTS_DIR
+    out_dir.mkdir(exist_ok=True)
     ticker = m["ticker"]
     name = _safe_filename(m.get("name") or ticker)
     score_str = f"{scoring['total']:05.1f}"
-    path = REPORTS_DIR / f"{score_str}_{ticker}_{name}.md"
+    path = out_dir / f"{score_str}_{ticker}_{name}.md"
     path.write_text(gen_report(m, scoring), encoding="utf-8")
     return path
 
 
-def save_summary_csv(rows: List[Dict[str, Any]], suffix: str = "") -> Path:
+def save_summary_csv(rows: List[Dict[str, Any]], suffix: str = "", output_dir: Path = None) -> Path:
+    out_dir = output_dir or REPORTS_DIR
+    out_dir.mkdir(exist_ok=True)
     rows = sorted(rows, key=lambda r: r.get("total_score", 0), reverse=True)
     date_str = datetime.now().strftime("%Y-%m-%d")
-    fname = f"_summary_{date_str}"
+    fname = f"{out_dir.name}_summary" if output_dir else f"_summary_{date_str}"
     if suffix:
         fname += f"_{suffix}"
-    path = REPORTS_DIR / f"{fname}.csv"
+    path = out_dir / f"{fname}.csv"
 
     if not rows:
         path.write_text("ticker,total_score\n(no results)\n", encoding="utf-8")
@@ -382,7 +377,7 @@ def save_summary_csv(rows: List[Dict[str, Any]], suffix: str = "") -> Path:
     try:
         f = path.open("w", newline="", encoding="utf-8-sig")
     except PermissionError:
-        fallback = REPORTS_DIR / f"{fname}_{datetime.now().strftime('%H%M%S')}.csv"
+        fallback = out_dir / f"{fname}_{datetime.now().strftime('%H%M%S')}.csv"
         f = fallback.open("w", newline="", encoding="utf-8-sig")
         path = fallback
 

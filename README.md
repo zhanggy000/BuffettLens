@@ -134,7 +134,7 @@ python -m screener.run_screener --universe ndx100 sp500 csi300
 python -m screener.run_screener --universe all
 ```
 
-When multiple universes are passed, BuffettLens keeps the first occurrence of each ticker and skips duplicates. A duplicate audit file is written to `reports/_universe_duplicates_YYYY-MM-DD.csv`.
+When multiple universes are passed, BuffettLens keeps the first occurrence of each ticker and skips duplicates. A duplicate audit file is written inside that run's report folder.
 
 Common flags:
 ```text
@@ -173,22 +173,20 @@ python run_csi300.py --limit 50
 python run_csi300.py --limit 80
 ```
 
-Snowball is fast: 50 stocks finish in ~45 seconds. Output:
-- `reports/csi300_top50_scored.csv` — full table with `data_source` column
-- `reports/{score}_{TICKER}_{name}.md` — per-stock reports
+Snowball is fast: 50 stocks finish in ~45 seconds.
 
 ---
 
 ## Output files
 
-All scripts write into `reports/`:
+All scripts write into a new run folder under `reports/`. Existing reports are not deleted.
 
 ```
 reports/
-├── _summary_2026-05-13.csv          # batch summary (sorted by score desc)
-├── 075.0_000651.SZ_格力电器.md       # per-stock Markdown
-├── 072.0_NVDA_NVIDIA_Corporation.md
-└── ...
+└── 20260513_150501_ndx100_limit80_score60/
+    ├── 20260513_150501_ndx100_limit80_score60_summary.csv
+    ├── 085.0_ADBE_Adobe_Inc.md
+    └── ...
 ```
 
 Each Markdown report has a footer line indicating data source:
@@ -196,7 +194,7 @@ Each Markdown report has a footer line indicating data source:
 *Data source: Snowball xueqiu.com (A-share primary) | akshare → Sina/Baidu (A-share fallback) | Yahoo Finance via yfinance (US/HK)*
 ```
 
-`reports/*.md` is wiped before each `screener.run_screener` run so batches don't mix. `_summary_*.csv` is preserved.
+Each run gets its own folder, so old Markdown reports and summary CSVs are preserved.
 
 ---
 

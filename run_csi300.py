@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from screener.run_screener import run
+from screener.run_screener import build_report_dir, run
 from screener.universe import get_csi300
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -27,12 +27,14 @@ def main() -> None:
 
     tickers = get_csi300()[:args.limit]
     print(f"CSI 300 top {len(tickers)} by index weight")
+    output_dir = build_report_dir("csi300", args.limit, args.min_score)
     run(
         tickers,
         delay=args.delay,
         force_refresh=args.force_refresh,
         min_score=args.min_score,
         all_reports=args.all_reports,
+        output_dir=output_dir,
     )
 
 
