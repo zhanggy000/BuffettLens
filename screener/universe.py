@@ -1,6 +1,8 @@
 """Ticker universe helpers for BuffettLens."""
 
 import io
+import os
+from pathlib import Path
 from typing import List, Optional
 
 
@@ -65,6 +67,55 @@ NDX100_FALLBACK = [
 ]
 
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CSI300_WEIGHT_XLS = Path(os.environ.get(
+    "CSI300_WEIGHT_XLS",
+    REPO_ROOT / "data" / "000300closeweight.xls",
+))
+
+
+def _find_col(columns, *needles: str) -> str:
+    for col in columns:
+        col_text = str(col).lower().replace(" ", "")
+        if all(needle.lower().replace(" ", "") in col_text for needle in needles):
+            return col
+    raise ValueError(f"Missing expected CSI 300 column containing: {', '.join(needles)}")
+
+
+def get_csi300(path: Optional[str] = None) -> List[str]:
+    """Load CSI 300 tickers from the official index weight Excel file."""
+    xls_path = Path(path) if path else CSI300_WEIGHT_XLS
+    if not xls_path.exists() and not path:
+        xls_path = Path.home() / "Downloads" / "000300closeweight.xls"
+    if not xls_path.exists():
+        raise FileNotFoundError(
+            f"CSI 300 weight file not found: {xls_path}. "
+            "Commit data/000300closeweight.xls, download it to ~/Downloads, or set CSI300_WEIGHT_XLS."
+        )
+
+    try:
+        import pandas as pd
+    except ImportError as exc:
+        raise ImportError("pandas is required to read CSI 300 universe files.") from exc
+
+    df = pd.read_excel(xls_path)
+    code_col = _find_col(df.columns, "Constituent", "Code")
+    exch_col = _find_col(df.columns, "Exchange")
+    weight_col = _find_col(df.columns, "weight")
+
+    df = df.sort_values(weight_col, ascending=False).reset_index(drop=True)
+    tickers = []
+    for _, row in df.iterrows():
+        code = str(row[code_col]).strip().split(".")[0].zfill(6)
+        exchange = str(row[exch_col])
+        suffix = ".SS" if "上海" in exchange or "Shanghai" in exchange else ".SZ"
+        tickers.append(f"{code}{suffix}")
+
+    tickers = list(dict.fromkeys(tickers))
+    print(f"Loaded CSI 300 from {xls_path}: {len(tickers)} tickers")
+    return tickers
+
+
 def get_sp500() -> List[str]:
     tickers = _try_wiki_table(
         "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
@@ -94,6 +145,8 @@ def get_universe(name: str) -> List[str]:
         return get_sp500()
     if name in ("ndx", "ndx100", "nasdaq100", "nasdaq_100", "qqq"):
         return get_ndx100()
-    if name in ("both", "all"):
-        return sorted(set(get_sp500()) | set(get_ndx100()))
-    raise ValueError(f"Unknown universe: {name}. Choose sp500, ndx100, or both.")
+    if name in ("csi300", "csi_300", "000300"):
+        return get_csi300()
+    if name in ("all",):
+        return sorted(set(get_sp500()) | set(get_ndx100()) | set(get_csi300()))
+    raise ValueError(f"Unknown universe: {name}. Choose sp500, ndx100, csi300, or all.")

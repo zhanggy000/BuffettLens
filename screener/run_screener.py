@@ -8,8 +8,8 @@
   # 跑S&P 500 (约25分钟)
   python -m screener.run_screener --universe sp500
 
-  # 跑两者合集
-  python -m screener.run_screener --universe both
+  # 跑多个股票池
+  python -m screener.run_screener --universe ndx100 sp500 csi300
 
   # 自定义ticker列表
   python -m screener.run_screener --tickers AAPL,MSFT,GOOGL
@@ -174,8 +174,9 @@ def run(tickers: List[str], delay: float = 2.0, force_refresh: bool = False,
 def main():
     p = argparse.ArgumentParser(description="BuffettLens 价值股筛选器")
     grp = p.add_mutually_exclusive_group()
-    grp.add_argument("--universe", "-u", choices=["sp500", "ndx100", "both"],
-                     default="ndx100", help="股票池 (默认: ndx100)")
+    grp.add_argument("--universe", "-u", nargs="+",
+                     choices=["sp500", "ndx100", "csi300", "all"],
+                     default=["ndx100"], help="股票池，可传多个 (默认: ndx100)")
     grp.add_argument("--tickers", "-t", type=str,
                      help="自定义ticker列表, 逗号分隔 (例如: AAPL,MSFT,GOOGL)")
 
@@ -195,7 +196,10 @@ def main():
     if args.tickers:
         tickers = [t.strip().upper() for t in args.tickers.split(",") if t.strip()]
     else:
-        tickers = get_universe(args.universe)
+        tickers = []
+        for universe_name in args.universe:
+            tickers.extend(get_universe(universe_name))
+        tickers = list(dict.fromkeys(tickers))
 
     if args.limit > 0:
         tickers = tickers[:args.limit]

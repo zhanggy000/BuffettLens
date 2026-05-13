@@ -13,9 +13,9 @@ A Python toolkit for value-investing screening across **US and A-share markets**
 | Scenario | Script |
 |---|---|
 | Quick fundamentals for one or a few US stocks | `stock_info.py` |
-| Batch-score a list of US tickers / NASDAQ 100 / S&P 500 | `screener.run_screener` |
+| Batch-score a list of US tickers / NASDAQ 100 / S&P 500 / CSI 300 | `screener.run_screener` |
 | Batch-score **mixed US + A-share** tickers in one run | `screener.run_screener` |
-| Score top-N CSI 300 by weight | `run_csi300_top50.py` |
+| Batch-score multiple universes together | `screener.run_screener --universe ndx100 sp500 csi300` |
 
 **Auto data routing** (you do nothing — the ticker format decides):
 
@@ -111,20 +111,26 @@ US 10Y: 4.46%   CN 10Y: 1.70%
 
 ---
 
-## Scenario 3 — Score a whole universe (NASDAQ 100 / S&P 500)
+## Scenario 3 — Score universes (NASDAQ 100 / S&P 500 / CSI 300)
 
 **Windows**
 ```powershell
 python -m screener.run_screener --universe ndx100
 python -m screener.run_screener --universe sp500
-python -m screener.run_screener --universe both
+python -m screener.run_screener --universe csi300
+python -m screener.run_screener --universe ndx100 sp500
+python -m screener.run_screener --universe ndx100 sp500 csi300
+python -m screener.run_screener --universe all
 ```
 
 **macOS / Linux**
 ```bash
 python -m screener.run_screener --universe ndx100
 python -m screener.run_screener --universe sp500
-python -m screener.run_screener --universe both
+python -m screener.run_screener --universe csi300
+python -m screener.run_screener --universe ndx100 sp500
+python -m screener.run_screener --universe ndx100 sp500 csi300
+python -m screener.run_screener --universe all
 ```
 
 Common flags:
@@ -138,9 +144,17 @@ Common flags:
 
 ---
 
-## Scenario 4 — Score top-N CSI 300 by index weight
+## Scenario 4 — Legacy top-N CSI 300 driver
 
-Driver: `run_csi300_top50.py`. Reads `C:\Users\EDY\Downloads\000300closeweight.xls` (the CSI 300 weight file you can download from the CSI Index website) and scores the top 50 by weight.
+The main entry point now supports full CSI 300 directly:
+
+```powershell
+python -m screener.run_screener --universe csi300
+```
+
+CSI 300 uses `data/000300closeweight.xls` by default. You can override it with the `CSI300_WEIGHT_XLS` environment variable.
+
+`run_csi300_top50.py` is kept as a legacy top-N helper. It reads `C:\Users\EDY\Downloads\000300closeweight.xls` (the CSI 300 weight file you can download from the CSI Index website) and scores the top 50 by weight.
 
 **Windows**
 ```powershell
@@ -227,6 +241,8 @@ For ADRs and non-US issuers, Yahoo may return market data in one currency (USD) 
 BuffettLens/
 ├── stock_info.py                # Quick US-stock fundamentals + 7-pt scorecard
 ├── run_csi300_top50.py          # Top-N CSI 300 by weight driver
+├── data/
+│   └── 000300closeweight.xls    # CSI 300 constituent weight file
 ├── screener/
 │   ├── run_screener.py          # Main CLI (mixed input supported)
 │   ├── fetcher.py               # Routing + SQLite cache + treasury fetch
@@ -235,7 +251,7 @@ BuffettLens/
 │   ├── metrics.py               # Indicator computation (weighted ROE, ROIC, etc.)
 │   ├── scorer.py                # 100-point scoring + hard gates
 │   ├── reporter.py              # Markdown + CSV output
-│   └── universe.py              # NDX100 / SP500 ticker lists
+│   └── universe.py              # NDX100 / SP500 / CSI300 ticker lists
 ├── reports/                     # Run outputs (gitignored)
 ├── requirements.txt
 ├── README.md

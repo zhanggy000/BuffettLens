@@ -12,8 +12,8 @@
 |---|---|---|
 | 单只/几只美股快速查询 + 7 项简易评分 | `stock_info.py` | `python stock_info.py NVDA` |
 | 批量评分:自定义清单(美股 / A 股 / **混合**) | `screener.run_screener` | `python -m screener.run_screener --tickers ...` |
-| 批量评分:整个股票池(NASDAQ 100 / S&P 500) | `screener.run_screener` | `python -m screener.run_screener --universe ndx100` |
-| 沪深 300 前 N 大权重股评分 | `run_csi300_top50.py` | `python run_csi300_top50.py` |
+| 批量评分:整个股票池(NASDAQ 100 / S&P 500 / CSI 300) | `screener.run_screener` | `python -m screener.run_screener --universe ndx100` |
+| 批量评分:多个股票池 | `screener.run_screener` | `python -m screener.run_screener --universe ndx100 sp500 csi300` |
 
 ## 数据源是自动选的
 
@@ -119,14 +119,20 @@ US 10Y: 4.46%   CN 10Y: 1.70%
 ```powershell
 python -m screener.run_screener --universe ndx100
 python -m screener.run_screener --universe sp500
-python -m screener.run_screener --universe both
+python -m screener.run_screener --universe csi300
+python -m screener.run_screener --universe ndx100 sp500
+python -m screener.run_screener --universe ndx100 sp500 csi300
+python -m screener.run_screener --universe all
 ```
 
 **macOS / Linux**
 ```bash
 python -m screener.run_screener --universe ndx100
 python -m screener.run_screener --universe sp500
-python -m screener.run_screener --universe both
+python -m screener.run_screener --universe csi300
+python -m screener.run_screener --universe ndx100 sp500
+python -m screener.run_screener --universe ndx100 sp500 csi300
+python -m screener.run_screener --universe all
 ```
 
 常用参数:
@@ -137,6 +143,8 @@ python -m screener.run_screener --universe both
 --min-score 70       低于此分不生成单股报告(默认 60)
 --all-reports        即便未过硬门槛或分数低也生成报告(调试用)
 ```
+
+`csi300` 默认读取仓库内 `data/000300closeweight.xls`。如需使用其他路径,可设置 `CSI300_WEIGHT_XLS` 环境变量。
 
 ---
 
@@ -229,6 +237,8 @@ ADR / 非美国公司 Yahoo 可能返回不一致的币种(股价 USD、财报 T
 BuffettLens/
 ├── stock_info.py                # 美股单股查询 + 7 项简易评分
 ├── run_csi300_top50.py          # 沪深300前N权重驱动脚本
+├── data/
+│   └── 000300closeweight.xls    # 沪深300成分权重文件
 ├── screener/
 │   ├── run_screener.py          # 主入口(支持混合输入)
 │   ├── fetcher.py               # 路由 + SQLite 缓存 + 国债收益率
@@ -237,7 +247,7 @@ BuffettLens/
 │   ├── metrics.py               # 指标计算(加权 ROE、ROIC 等)
 │   ├── scorer.py                # 100 分评分 + 硬门槛
 │   ├── reporter.py              # Markdown + CSV 输出
-│   └── universe.py              # NDX100 / SP500 清单
+│   └── universe.py              # NDX100 / SP500 / CSI300 清单
 ├── reports/                     # 运行生成(gitignore)
 ├── requirements.txt
 ├── README.md

@@ -6,3 +6,4 @@ requests>=2.31.0
 akshare>=1.13.0
 # akshare 读 .xls 时需要
 xlrd>=2.0.1
+xlrd>=2.0.1
