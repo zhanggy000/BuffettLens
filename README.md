@@ -133,6 +133,8 @@ python -m screener.run_screener --universe ndx100 sp500 csi300
 python -m screener.run_screener --universe all
 ```
 
+When multiple universes are passed, BuffettLens keeps the first occurrence of each ticker and skips duplicates. A duplicate audit file is written to `reports/_universe_duplicates_YYYY-MM-DD.csv`.
+
 Common flags:
 ```text
 --delay 3            request interval seconds (default 2; only matters for cache misses)

@@ -135,6 +135,8 @@ python -m screener.run_screener --universe ndx100 sp500 csi300
 python -m screener.run_screener --universe all
 ```
 
+传入多个股票池时,BuffettLens 会保留每个 ticker 第一次出现的位置,重复成分股会跳过不重复跑。重复记录会写入 `reports/_universe_duplicates_YYYY-MM-DD.csv`。
+
 常用参数:
 ```text
 --delay 3            请求间隔秒数(默认 2,仅影响 cache miss 的请求)

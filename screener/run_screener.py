@@ -25,9 +25,11 @@
 """
 
 import argparse
+import csv
 import sys
 import time
-from typing import List
+from datetime import datetime
+from typing import Dict, List, Tuple
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -39,6 +41,47 @@ from . import metrics as metrics_mod
 from . import reporter
 from . import scorer
 from .universe import get_universe
+
+
+def resolve_universes(universe_names: List[str]) -> Tuple[List[str], List[Dict[str, str]]]:
+    """Expand universes, preserving first occurrence and recording skipped duplicates."""
+    seen = set()
+    tickers: List[str] = []
+    duplicates: List[Dict[str, str]] = []
+
+    for universe_name in universe_names:
+        universe_tickers = get_universe(universe_name)
+        for ticker in universe_tickers:
+            ticker = ticker.strip().upper()
+            if not ticker:
+                continue
+            if ticker in seen:
+                duplicates.append({"ticker": ticker, "skipped_from": universe_name})
+                continue
+            seen.add(ticker)
+            tickers.append(ticker)
+
+    if len(universe_names) > 1 or duplicates:
+        raw_count = len(tickers) + len(duplicates)
+        print(
+            f"Universe merge: raw={raw_count}, unique={len(tickers)}, "
+            f"duplicates_skipped={len(duplicates)}"
+        )
+
+    return tickers, duplicates
+
+
+def save_universe_duplicates(duplicates: List[Dict[str, str]]):
+    if not duplicates:
+        return None
+    reporter.REPORTS_DIR.mkdir(exist_ok=True)
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    path = reporter.REPORTS_DIR / f"_universe_duplicates_{date_str}.csv"
+    with path.open("w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=["ticker", "skipped_from"])
+        writer.writeheader()
+        writer.writerows(duplicates)
+    return path
 
 
 def run(tickers: List[str], delay: float = 2.0, force_refresh: bool = False,
@@ -195,11 +238,12 @@ def main():
 
     if args.tickers:
         tickers = [t.strip().upper() for t in args.tickers.split(",") if t.strip()]
+        duplicates = []
     else:
-        tickers = []
-        for universe_name in args.universe:
-            tickers.extend(get_universe(universe_name))
-        tickers = list(dict.fromkeys(tickers))
+        tickers, duplicates = resolve_universes(args.universe)
+        duplicate_path = save_universe_duplicates(duplicates)
+        if duplicate_path:
+            print(f"Duplicate universe tickers skipped: {duplicate_path}")
 
     if args.limit > 0:
         tickers = tickers[:args.limit]
