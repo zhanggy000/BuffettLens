@@ -43,6 +43,7 @@ stock_data_*.json
 
 # Generated screener outputs and cache
 reports/
+portfolios/
 screener/cache/
 
 # Jupyter

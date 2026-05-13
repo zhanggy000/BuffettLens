@@ -194,6 +194,43 @@ reports/
 
 ---
 
+## 模拟组合跟踪
+
+从任意 BuffettLens 报告目录创建模拟组合:
+
+```powershell
+python create_portfolio.py --report-dir reports/20260513_150501_ndx100_limit80_score60 --min-score 75 --cash 100000 --method equal
+python create_portfolio.py --report-dir reports/20260513_150501_ndx100_limit80_score60 --min-score 75 --cash 100000 --method score_weighted
+```
+
+分配方式:
+
+```text
+equal           每只股票平均分配资金
+score_weighted  分数越高买得越多
+top_heavy       高分股明显更重(权重 = score^2)
+```
+
+后续跟踪组合收益。脚本会从建仓日自动补齐到最新交易日,所以你每天跑可以看当天,隔很多天再跑也会补齐中间历史:
+
+```powershell
+python track_portfolio.py --portfolio portfolios/20260513_183000_ndx100_score75_cash100000_equal
+```
+
+组合输出:
+
+```text
+portfolios/{组合名}/portfolio.json
+portfolios/{组合名}/positions.csv
+portfolios/{组合名}/report.md
+portfolios/{组合名}/history.csv
+portfolios/{组合名}/latest.md
+```
+
+`history.csv` 会对比组合收益、SPY 收益、QQQ 收益。它是模拟小数股组合,不做汇率换算。
+
+---
+
 ## 100 分系统怎么算
 
 总分 100 分,六组:

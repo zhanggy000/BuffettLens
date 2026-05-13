@@ -198,6 +198,43 @@ Each run gets its own folder, so old Markdown reports and summary CSVs are prese
 
 ---
 
+## Portfolio Tracking
+
+Create a simulated portfolio from any BuffettLens report folder:
+
+```powershell
+python create_portfolio.py --report-dir reports/20260513_150501_ndx100_limit80_score60 --min-score 75 --cash 100000 --method equal
+python create_portfolio.py --report-dir reports/20260513_150501_ndx100_limit80_score60 --min-score 75 --cash 100000 --method score_weighted
+```
+
+Allocation methods:
+
+```text
+equal           equal cash per stock
+score_weighted  higher scores get larger weights
+top_heavy       higher scores get much larger weights (score squared)
+```
+
+Track the portfolio later. The tracker backfills history from the buy date to the latest trading day, so it works whether you run it daily or after missing several days:
+
+```powershell
+python track_portfolio.py --portfolio portfolios/20260513_183000_ndx100_score75_cash100000_equal
+```
+
+Portfolio outputs:
+
+```text
+portfolios/{portfolio_name}/portfolio.json
+portfolios/{portfolio_name}/positions.csv
+portfolios/{portfolio_name}/report.md
+portfolios/{portfolio_name}/history.csv
+portfolios/{portfolio_name}/latest.md
+```
+
+`history.csv` compares portfolio return with SPY and QQQ. This is a simulated fractional-share portfolio; no currency conversion is applied.
+
+---
+
 ## Scoring model
 
 100 points across six categories:
