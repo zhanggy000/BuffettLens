@@ -9,6 +9,9 @@ from typing import Any, Dict, Optional
 
 import yfinance as yf
 
+from . import ashare_fetcher
+from . import xueqiu_fetcher
+
 CACHE_DIR = Path(__file__).resolve().parent / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
 CACHE_DB = CACHE_DIR / "data.db"
@@ -136,8 +139,22 @@ def fetch_stock(ticker: str, force_refresh: bool = False) -> Optional[Dict[str, 
     """Fetch one stock's profile, statements, and price history."""
     if not force_refresh:
         cached = _cache_get(ticker)
-        if cached is not None and len(cached.get("price_history", [])) >= 500 and "news" in cached:
+        if cached is not None and len(cached.get("price_history", [])) >= 200 and "news" in cached:
             return cached
+
+    # 路由: A股优先雪球, 失败时回退到 akshare
+    if xueqiu_fetcher.is_ashare(ticker):
+        data = None
+        try:
+            data = xueqiu_fetcher.fetch_xueqiu(ticker)
+        except Exception as e:
+            print(f"  WARN xueqiu fail {ticker}: {e}")
+        if data is None:
+            print(f"  → 回退 akshare")
+            data = ashare_fetcher.fetch_ashare_with_retry(ticker)
+        if data is not None:
+            _cache_set(ticker, data)
+        return data
 
     last_error = None
     for attempt in range(1, 4):
@@ -171,6 +188,7 @@ def fetch_stock(ticker: str, force_refresh: bool = False) -> Optional[Dict[str, 
             except Exception:
                 data["news"] = []
 
+            data["_source"] = "yfinance"
             _cache_set(ticker, data)
             return data
 
@@ -208,7 +226,7 @@ def fetch_batch(tickers: list, delay: float = 2.0, force_refresh: bool = False) 
 
 
 def get_10y_treasury_yield() -> float:
-    """Fetch 10-year Treasury yield; return 4.0% as a conservative fallback."""
+    """Fetch 美国 10-year Treasury yield; return 4.0% as a conservative fallback."""
     try:
         cached = _cache_get("__TNX__", max_age_hours=12)
         if cached and "value" in cached:
@@ -223,3 +241,14 @@ def get_10y_treasury_yield() -> float:
     except Exception:
         pass
     return 4.0
+
+
+# 中国 10Y 国债收益率较稳定, 直接取近似值. 如需动态可接入 akshare bond_china_yield
+_CN_10Y_DEFAULT = 1.7
+
+
+def get_treasury_for_ticker(ticker: str) -> float:
+    """根据 ticker 自动选择对应市场的 10 年期国债收益率."""
+    if xueqiu_fetcher.is_ashare(ticker):
+        return _CN_10Y_DEFAULT
+    return get_10y_treasury_yield()

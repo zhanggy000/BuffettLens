@@ -1,52 +1,74 @@
 # BuffettLens
 
-A Python toolkit for stock lookup and value-investing screening with free Yahoo Finance data.
+A Python toolkit for value-investing screening across **US and A-share markets**, with auto-routed data sources.
 
 **[中文 README](./README_zh.md)**
 
-BuffettLens has two entry points:
+> Disclaimer: BuffettLens is a research helper, not investment advice.
 
-- `stock_info.py`: quick single-stock or multi-stock lookup with a simple 7-point Buffett-style scorecard.
-- `screener/`: a 100-point batch screening system that scans a universe and generates Markdown reports.
+---
 
-> Disclaimer: This project is a research helper, not investment advice.
+## What it does
+
+| Scenario | Script |
+|---|---|
+| Quick fundamentals for one or a few US stocks | `stock_info.py` |
+| Batch-score a list of US tickers / NASDAQ 100 / S&P 500 | `screener.run_screener` |
+| Batch-score **mixed US + A-share** tickers in one run | `screener.run_screener` |
+| Score top-N CSI 300 by weight | `run_csi300_top50.py` |
+
+**Auto data routing** (you do nothing — the ticker format decides):
+
+| Ticker format | Primary source | Fallback | 10Y bond used |
+|---|---|---|---|
+| `600519.SS` / `300502.SZ` (A-shares) | **Snowball** (xueqiu.com) | akshare (Sina/Baidu) | China 10Y ≈ 1.7% |
+| `AAPL` / `MSFT` (US) | **yfinance** (Yahoo Finance) | — | US 10Y (^TNX live) |
+
+Each generated report shows which data source was used.
 
 ---
 
 ## Install
 
-Python 3.10+ is recommended.
+Python 3.10+ recommended.
+
+**Windows (PowerShell)**
+
+```powershell
+pip install -r requirements.txt
+# or with explicit interpreter:
+& "C:\Users\EDY\AppData\Local\Python\bin\python.exe" -m pip install -r requirements.txt
+```
+
+**macOS / Linux (bash/zsh)**
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Dependencies:
-
-- `yfinance`
-- `pandas`
-- `lxml`
+Dependencies: `yfinance` (US), `requests` (Snowball HTTP), `akshare` (A-share fallback), `pandas`, `lxml`, `xlrd`.
 
 ---
 
-## Quick Lookup: `stock_info.py`
+## Scenario 1 — Quick lookup of one US stock
 
-```bash
-# Single stock
+`stock_info.py` prints fundamentals + a 7-point Buffett scorecard. US tickers only.
+
+**Windows**
+```powershell
 python stock_info.py NVDA
-
-# Multiple stocks
-python stock_info.py NVDA GOOGL MSFT
-
-# Show the 7-point Buffett scorecard
-python stock_info.py NVDA --buffett
-
-# Save JSON
-python stock_info.py NVDA GOOGL --save
+python stock_info.py NVDA GOOGL MSFT --buffett
+python stock_info.py NVDA --save
 ```
 
-On Windows, if your console cannot print emoji, set:
+**macOS / Linux**
+```bash
+python stock_info.py NVDA
+python stock_info.py NVDA GOOGL MSFT --buffett
+python stock_info.py NVDA --save
+```
 
+If Windows console can't render emoji:
 ```powershell
 $env:PYTHONIOENCODING="utf-8"
 python stock_info.py NVDA --buffett
@@ -54,112 +76,180 @@ python stock_info.py NVDA --buffett
 
 ---
 
-## 100-Point Screener
+## Scenario 2 — Score a custom watchlist (US-only, A-share-only, or **mixed**)
 
-The 100-point system lives under `screener/`.
+This is the main entry point: `screener.run_screener`. Mixed input auto-routes.
 
+**Windows (PowerShell)**
+```powershell
+# US only
+python -m screener.run_screener --tickers "NVDA,GOOGL,MSFT,AVGO"
+
+# A-share only
+python -m screener.run_screener --tickers "600519.SS,300502.SZ,000651.SZ"
+
+# Mixed in one run — bond rate is picked per ticker (CN vs US 10Y)
+python -m screener.run_screener --tickers "AAPL,MSFT,600519.SS,300502.SZ,NVDA"
+```
+
+**macOS / Linux**
 ```bash
-# Custom tickers
-python -m screener.run_screener --tickers NVDA,GOOGL,MSFT,AVGO,TSM
+python -m screener.run_screener --tickers "NVDA,GOOGL,MSFT,AVGO"
+python -m screener.run_screener --tickers "600519.SS,300502.SZ,000651.SZ"
+python -m screener.run_screener --tickers "AAPL,MSFT,600519.SS,300502.SZ,NVDA"
+```
 
-# NASDAQ 100
+Console will show e.g.:
+```
+US 10Y: 4.46%   CN 10Y: 1.70%
+
+[1/5] AAPL      → 56.0  ⭐
+[2/5] MSFT      → 68.0  ⭐⭐
+[3/5] 600519.SS → 68.0  ⭐⭐  贵州茅台
+...
+```
+
+---
+
+## Scenario 3 — Score a whole universe (NASDAQ 100 / S&P 500)
+
+**Windows**
+```powershell
 python -m screener.run_screener --universe ndx100
-
-# S&P 500
 python -m screener.run_screener --universe sp500
-
-# Both universes
 python -m screener.run_screener --universe both
 ```
 
-Useful options:
-
+**macOS / Linux**
 ```bash
---delay 3          # request delay; default is 2 seconds
---force-refresh   # refresh yfinance cache
---limit 10        # process only the first N tickers
---min-score 70    # default is 60
---all-reports     # generate reports even for low-score / failed-gate stocks
+python -m screener.run_screener --universe ndx100
+python -m screener.run_screener --universe sp500
+python -m screener.run_screener --universe both
 ```
 
-Reports are written to:
-
+Common flags:
 ```text
+--delay 3            request interval seconds (default 2; only matters for cache misses)
+--force-refresh      ignore SQLite cache
+--limit 10           process only first N (for testing)
+--min-score 70       reports only for stocks >= this (default 60)
+--all-reports        generate reports even for failed-gate / low-score
+```
+
+---
+
+## Scenario 4 — Score top-N CSI 300 by index weight
+
+Driver: `run_csi300_top50.py`. Reads `C:\Users\EDY\Downloads\000300closeweight.xls` (the CSI 300 weight file you can download from the CSI Index website) and scores the top 50 by weight.
+
+**Windows**
+```powershell
+python run_csi300_top50.py
+```
+
+**macOS / Linux**
+
+Edit the `XLS` constant at the top of `run_csi300_top50.py` to your local path, then:
+```bash
+python run_csi300_top50.py
+```
+
+Snowball is fast: 50 stocks finish in ~45 seconds. Output:
+- `reports/csi300_top50_scored.csv` — full table with `data_source` column
+- `reports/{score}_{TICKER}_{name}.md` — per-stock reports
+
+---
+
+## Output files
+
+All scripts write into `reports/`:
+
+```
 reports/
+├── _summary_2026-05-13.csv          # batch summary (sorted by score desc)
+├── 075.0_000651.SZ_格力电器.md       # per-stock Markdown
+├── 072.0_NVDA_NVIDIA_Corporation.md
+└── ...
 ```
 
-Outputs:
+Each Markdown report has a footer line indicating data source:
+```
+*Data source: Snowball xueqiu.com (A-share primary) | akshare → Sina/Baidu (A-share fallback) | Yahoo Finance via yfinance (US/HK)*
+```
 
-- `_summary_YYYY-MM-DD.csv` or `_summary_YYYY-MM-DD_HHMMSS.csv`
-- `{score}_{TICKER}_{company}.md`
-
-The screener clears old per-stock Markdown reports before each run so different runs do not mix.
-
----
-
-## Scoring Model
-
-The score is 100 points across six groups:
-
-| Group | Name | Max | Focus |
-|---|---|---:|---|
-| A | Buffett core quality | 35 | ROE, ROIC, margins, FCF quality, gross margin trend |
-| B | Financial strength | 15 | debt, D/E, interest coverage, current ratio |
-| C | Growth | 15 | net income CAGR, revenue CAGR, loss years, share count |
-| D | Valuation | 20 | Forward PE, PEG, FCF Yield, P/FCF, earnings yield vs 10Y Treasury |
-| E | Munger moat | 10 | operating margin level, margin stability, goodwill/assets |
-| F | Technical reference | 5 | price vs 200-day moving average, RSI |
-
-Technical indicators are intentionally capped at 5 points.
-
-Hard gates are applied before report generation:
-
-- market cap above $500M
-- ROE above 8%
-- latest annual net income positive
-- D/E below 3.0
-- at least 2 years of financial history
-- not too many recent loss years
+`reports/*.md` is wiped before each `screener.run_screener` run so batches don't mix. `_summary_*.csv` is preserved.
 
 ---
 
-## Report Contents
+## Scoring model
 
-Each Markdown report includes:
+100 points across six categories:
 
-- total score and rating
-- recommendation summary
-- price-action context: YTD, 1-year, 3-year returns, drawdown, 52-week position
-- likely decline reasons when available; otherwise "unknown reason"
-- high-score strong-price-action alerts
-- business summary from Yahoo Finance
-- detailed A-F scoring table
-- key metrics snapshot
-- technical reference
-- source label explanations
+| Group | Max | Focus |
+|---|---:|---|
+| A — Buffett core quality | 35 | ROE, ROIC, margins, FCF/NI, gross margin trend |
+| B — Financial strength | 15 | LT-debt/NI, D/E, interest coverage, current ratio |
+| C — Growth | 15 | NI CAGR, revenue CAGR, loss years, share dilution |
+| D — Valuation | 20 | Forward PE, PEG, FCF Yield, P/FCF, E/P vs 10Y |
+| E — Munger moat | 10 | OpMargin level + stability (CV), goodwill ratio |
+| F — Technical reference | 5 | price vs 200MA, RSI |
+
+**Hard gates** (must pass to generate a report by default):
+- Market cap ≥ ~$500M (in CNY for A-shares ≈ ¥3.5B)
+- 4-year average ROE ≥ 8%
+- Latest annual net income > 0
+- D/E ≤ 3.0  *(banks fail this by design — known limitation, see below)*
+- ≥ 2 years of financial history
+- < 3 loss years in the available history
+
+**ROE is computed China-GAAP style**: NI / weighted-average equity ((beginning + ending) / 2), using **parent-company equity** (归属于母公司股东权益) to match the 归母净利润 numerator. This matches what Snowball / Wind display.
 
 ---
 
-## Currency Handling
+## A-share data quality notes
 
-For ADRs and non-US companies, Yahoo Finance may return market data in one currency and financial statements in another. When `currency` and `financialCurrency` differ, BuffettLens avoids calculating `FCF Yield` and `P/FCF` to prevent false cheapness from currency mismatch.
+- **Primary source is Snowball** because it provides Chinese-standard 加权 ROE, full three statements (income / balance / cash flow), and live PE/PB in a single coherent API.
+- **akshare (Sina/Baidu) fallback** — used when Snowball fails (cookie expiry / rate limit). One known issue: Sina's pre-computed `净资产收益率(ROE)` field has occasional bugs (e.g., 紫金矿业 2024 returns 21.66 instead of 25.89). BuffettLens does **not** trust this field; ROE is always recomputed from NI/equity.
+- **Banks and brokers underscored**: D/E is computed as interest-bearing debt / equity. Banks have 10x+ leverage by accounting nature — the hard gate flags them but final scores are still computed. Use them as relative comparison within sector.
+- **CapEx is real, not approximated**: Snowball provides `cash_paid_for_assets` directly, so FCF = OCF − CapEx is accurate (unlike the previous akshare-only approximation FCF ≈ OCF).
 
 ---
 
-## Project Structure
+## US-stock currency edge case
 
-```text
+For ADRs and non-US issuers, Yahoo may return market data in one currency (USD) and statements in another (TWD, EUR…). When they differ, BuffettLens skips `FCF Yield` and `P/FCF` to avoid false cheapness.
+
+---
+
+## Project structure
+
+```
 BuffettLens/
-├── stock_info.py
+├── stock_info.py                # Quick US-stock fundamentals + 7-pt scorecard
+├── run_csi300_top50.py          # Top-N CSI 300 by weight driver
 ├── screener/
-│   ├── universe.py
-│   ├── fetcher.py
-│   ├── metrics.py
-│   ├── scorer.py
-│   ├── reporter.py
-│   └── run_screener.py
-├── reports/
+│   ├── run_screener.py          # Main CLI (mixed input supported)
+│   ├── fetcher.py               # Routing + SQLite cache + treasury fetch
+│   ├── xueqiu_fetcher.py        # Snowball v5 client (A-share primary)
+│   ├── ashare_fetcher.py        # akshare adapter (A-share fallback)
+│   ├── metrics.py               # Indicator computation (weighted ROE, ROIC, etc.)
+│   ├── scorer.py                # 100-point scoring + hard gates
+│   ├── reporter.py              # Markdown + CSV output
+│   └── universe.py              # NDX100 / SP500 ticker lists
+├── reports/                     # Run outputs (gitignored)
 ├── requirements.txt
 ├── README.md
 └── README_zh.md
 ```
+
+---
+
+## Common questions
+
+**Why does a high-scoring stock drop a lot?** Could be margin-of-safety compression, or genuine business decay. Reports show price-action context for context, not causation.
+
+**Why are banks scored low?** D/E gate is calibrated for industrials/tech. Banks are a known structural mis-fit; their core ratios (NIM, CAR, NPL) aren't in the model.
+
+**Snowball is rate-limited — what happens?** First failure triggers the akshare fallback automatically. You'll see `→ 回退 akshare` in the console.
+
+**Why does ETN-type quality compounder score low?** Most likely valuation is rich (PE / PEG / FCF Yield all fail thresholds), pulling D-group down.

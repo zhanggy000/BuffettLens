@@ -221,6 +221,7 @@ def compute_metrics(raw: Dict[str, Any], treasury_10y: float = 4.0) -> Dict[str,
         "country": info.get("country"),
         "summary": info.get("longBusinessSummary"),
         "news": raw.get("news", []) or [],
+        "data_source": raw.get("_source") or "yfinance",
     }
 
     # ---- 基础信息 ----
@@ -242,26 +243,39 @@ def compute_metrics(raw: Dict[str, Any], treasury_10y: float = 4.0) -> Dict[str,
 
     # ---- A组: Buffett 核心质量 ----
 
-    # ROE 4年平均: 用 财报 NI / 资产负债表 equity (按年配对)
+    # ROE 4年: 用 加权平均股东权益 = (期初+期末)/2  作分母 (中国会计准则口径, 与雪球/Wind 一致)
+    # 这对快速增长公司很重要 — 期末口径会系统性低估 ROE
     fin_cols = sorted(fin.keys(), reverse=True)
     bs_cols = sorted(bs.keys(), reverse=True)
 
     roe_series = []
     for i in range(min(len(fin_cols), len(bs_cols), 4)):
         ni = _row(fin, NAMES_NET_INCOME, i)
-        eq = _row(bs, NAMES_EQUITY, i)
-        roe_series.append(_safe_div(ni, eq))
+        eq_end = _row(bs, NAMES_EQUITY, i)
+        eq_begin = _row(bs, NAMES_EQUITY, i + 1)  # 上一年期末 = 本年期初
+        if eq_begin is not None and eq_end is not None:
+            eq_avg = (eq_begin + eq_end) / 2.0
+        else:
+            eq_avg = eq_end  # 没有期初数据时退化为期末
+        roe_series.append(_safe_div(ni, eq_avg))
     m["roe_series"] = roe_series
     m["roe_avg"] = _mean(roe_series)
     m["roe_current"] = roe_series[0] if roe_series else info.get("returnOnEquity")
 
-    # ROIC = NOPAT / (Equity + LT Debt). NOPAT ≈ Operating Income * 0.79 (假设21%税率)
+    # ROIC = NOPAT / 加权平均(Equity + LT Debt). NOPAT ≈ 营业利润 × 0.79
     op_income = _row(fin, NAMES_OP_INCOME, 0)
     eq0 = _row(bs, NAMES_EQUITY, 0)
+    eq1 = _row(bs, NAMES_EQUITY, 1)
     ltd0 = _row(bs, NAMES_LT_DEBT, 0) or 0
-    if op_income is not None and eq0 is not None and (eq0 + ltd0) > 0:
-        nopat = op_income * 0.79
-        m["roic"] = nopat / (eq0 + ltd0)
+    ltd1 = _row(bs, NAMES_LT_DEBT, 1) or 0
+    if op_income is not None and eq0 is not None:
+        invested0 = eq0 + ltd0
+        invested1 = (eq1 + ltd1) if eq1 is not None else invested0
+        invested_avg = (invested0 + invested1) / 2.0
+        if invested_avg > 0:
+            m["roic"] = (op_income * 0.79) / invested_avg
+        else:
+            m["roic"] = None
     else:
         m["roic"] = None
 

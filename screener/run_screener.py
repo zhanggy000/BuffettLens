@@ -55,10 +55,11 @@ def run(tickers: List[str], delay: float = 2.0, force_refresh: bool = False,
     if removed:
         print(f"  已清理旧 Markdown 报告: {removed} 个\n")
 
-    # 获取10年期国债收益率 (用于Buffett的E/P比较)
+    # 获取10年期国债收益率 (按 ticker 市场自动区分: 美股=^TNX, A股=中国10Y)
     print("  获取 10年期国债收益率...")
-    treasury_10y = fetcher.get_10y_treasury_yield()
-    print(f"  10Y Treasury: {treasury_10y:.2f}%\n")
+    treasury_us = fetcher.get_10y_treasury_yield()
+    treasury_cn = fetcher._CN_10Y_DEFAULT
+    print(f"  US 10Y: {treasury_us:.2f}%   CN 10Y: {treasury_cn:.2f}%\n")
 
     summary_rows = []
     passed_count = 0
@@ -78,7 +79,8 @@ def run(tickers: List[str], delay: float = 2.0, force_refresh: bool = False,
                     time.sleep(delay)
                 continue
 
-            m = metrics_mod.compute_metrics(raw, treasury_10y=treasury_10y)
+            t10y = treasury_cn if fetcher.xueqiu_fetcher.is_ashare(ticker) else treasury_us
+            m = metrics_mod.compute_metrics(raw, treasury_10y=t10y)
             passed, fail_reasons = scorer.hard_gates(m)
             scoring = scorer.score(m)
             total = scoring["total"]

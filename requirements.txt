@@ -1,2 +1,8 @@
 yfinance>=0.2.40
 lxml>=5.0.0
+pandas>=2.0.0
+requests>=2.31.0
+# A 股数据源 (兜底, 主源是 xueqiu HTTP API, 无需 SDK)
+akshare>=1.13.0
+# akshare 读 .xls 时需要
+xlrd>=2.0.1

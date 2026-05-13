@@ -1,246 +1,244 @@
 # BuffettLens
 
-一个用 Yahoo Finance 免费数据做美股查询和价值筛选的小工具。
+一个支持 **A 股 + 美股** 的价值股筛选工具,数据源按 ticker 自动路由。
 
-项目里有两个入口：
+> 免责声明:BuffettLens 只做数据整理和量化初筛,不构成投资建议。高分不等于可以买,低分也不等于一定差。
 
-- `stock_info.py`：单股/多股即时查询，带 7 项 Buffett 简易评分卡。
-- `screener/`：100 分价值筛选系统，批量扫描股票池并生成 Markdown 报告。
+---
 
-> 免责声明：本项目只做数据整理和量化初筛，不构成投资建议。高分不等于可以买，低分也不等于一定差。请结合业务、行业、估值、风险和自己的研究判断。
+## 我该用哪个脚本?
+
+| 场景 | 脚本 | 入口命令 |
+|---|---|---|
+| 单只/几只美股快速查询 + 7 项简易评分 | `stock_info.py` | `python stock_info.py NVDA` |
+| 批量评分:自定义清单(美股 / A 股 / **混合**) | `screener.run_screener` | `python -m screener.run_screener --tickers ...` |
+| 批量评分:整个股票池(NASDAQ 100 / S&P 500) | `screener.run_screener` | `python -m screener.run_screener --universe ndx100` |
+| 沪深 300 前 N 大权重股评分 | `run_csi300_top50.py` | `python run_csi300_top50.py` |
+
+## 数据源是自动选的
+
+不用配置,根据 ticker 形式自动决定:
+
+| ticker 形式 | 主源 | 兜底 | 10年期国债基准 |
+|---|---|---|---|
+| `600519.SS` / `300502.SZ`(A股) | **雪球** xueqiu.com | akshare(新浪/百度) | 中国 10Y ≈ 1.7% |
+| `AAPL` / `MSFT`(美股) | **yfinance**(Yahoo Finance) | 无 | 美国 10Y (^TNX 动态取) |
+
+每份 Markdown 报告底部都会标注用了哪个数据源。
 
 ---
 
 ## 安装
 
-建议使用 Python 3.10+。
+建议 Python 3.10+。
+
+**Windows(PowerShell)**
 
 ```powershell
 pip install -r requirements.txt
-```
-
-如果你使用本机当前约定的 Python 路径，可以这样运行：
-
-```powershell
+# 或用显式 Python 路径:
 & "C:\Users\EDY\AppData\Local\Python\bin\python.exe" -m pip install -r requirements.txt
 ```
 
-依赖包括：
+**macOS / Linux(bash/zsh)**
 
-- `yfinance`：获取 Yahoo Finance 数据
-- `pandas`：yfinance 依赖，同时用于读取股票池
-- `lxml`：读取 Wikipedia 成分股表格
+```bash
+pip install -r requirements.txt
+```
+
+依赖:`yfinance`(美股)、`requests`(雪球 HTTP)、`akshare`(A 股兜底)、`pandas`、`lxml`、`xlrd`。
 
 ---
 
-## 入口一：日常查询 `stock_info.py`
+## 场景 1 — 看一两只美股的基本面
 
-这个脚本适合快速看单只股票或几只股票的实时数据。
+`stock_info.py` 显示基本面 + 7 项 Buffett 评分。**只支持美股**。
 
+**Windows**
 ```powershell
-# 查询单只股票
-& "C:\Users\EDY\AppData\Local\Python\bin\python.exe" stock_info.py NVDA
-
-# 查询多只股票
-& "C:\Users\EDY\AppData\Local\Python\bin\python.exe" stock_info.py NVDA GOOGL MSFT
-
-# 显示 7 项 Buffett 简易评分卡
-& "C:\Users\EDY\AppData\Local\Python\bin\python.exe" stock_info.py NVDA --buffett
-
-# 保存 JSON 数据
-& "C:\Users\EDY\AppData\Local\Python\bin\python.exe" stock_info.py NVDA GOOGL --save
+python stock_info.py NVDA
+python stock_info.py NVDA GOOGL MSFT --buffett
+python stock_info.py NVDA --save
 ```
 
-如果 Windows 控制台显示 emoji 报错，可以先设置输出编码：
+**macOS / Linux**
+```bash
+python stock_info.py NVDA
+python stock_info.py NVDA GOOGL MSFT --buffett
+python stock_info.py NVDA --save
+```
 
+Windows 控制台如果显示 emoji 报错:
 ```powershell
 $env:PYTHONIOENCODING="utf-8"
-& "C:\Users\EDY\AppData\Local\Python\bin\python.exe" stock_info.py NVDA --buffett
+python stock_info.py NVDA --buffett
 ```
 
-`stock_info.py` 会显示：
-
-- 公司、行业、国家、员工数
-- 当前价格、52 周高低点、50/200 日均线
-- PE、Forward PE、PEG、PB、PS、EV/EBITDA
-- 毛利率、营业利润率、净利率、ROE、ROA
-- 营收/利润增长
-- 现金、债务、流动比率、自由现金流
-- 分析师目标价和评级
-- 7 项 Buffett 简易评分卡
+`stock_info.py` 输出:公司/行业/国家/员工数、价格/52周高低/均线、PE/Forward PE/PEG/PB/PS/EV-EBITDA、各项利润率、ROE/ROA、营收/利润增长、现金/债务/流动比率/FCF、分析师目标价、7 项 Buffett 评分。
 
 ---
 
-## 入口二：100 分价值筛选系统
+## 场景 2 — 跑自定义清单(美股 / A 股 / **混合**)
 
-100 分系统在 `screener/` 目录里，适合批量扫描股票池并生成单股 Markdown 报告。
+这是最常用的入口。混合输入自动按 ticker 路由,国债收益率也会按市场自动选(中国 1.7% / 美国 4%)。
 
-### 快速运行
-
+**Windows(PowerShell)**
 ```powershell
-# 扫描自定义股票列表
-& "C:\Users\EDY\AppData\Local\Python\bin\python.exe" -m screener.run_screener --tickers NVDA,GOOGL,MSFT,AVGO,TSM
+# 纯美股
+python -m screener.run_screener --tickers "NVDA,GOOGL,MSFT,AVGO"
 
-# 扫描 NASDAQ 100
-& "C:\Users\EDY\AppData\Local\Python\bin\python.exe" -m screener.run_screener --universe ndx100
+# 纯 A 股
+python -m screener.run_screener --tickers "600519.SS,300502.SZ,000651.SZ"
 
-# 扫描 S&P 500
-& "C:\Users\EDY\AppData\Local\Python\bin\python.exe" -m screener.run_screener --universe sp500
-
-# 同时扫描 NASDAQ 100 和 S&P 500
-& "C:\Users\EDY\AppData\Local\Python\bin\python.exe" -m screener.run_screener --universe both
+# 混合一次跑 — 数据源、国债基准都自动按股票选
+python -m screener.run_screener --tickers "AAPL,MSFT,600519.SS,300502.SZ,NVDA"
 ```
 
-### 常用参数
-
-```powershell
-# 设置请求间隔，默认 2 秒，降低被 Yahoo 限流的概率
---delay 3
-
-# 强制刷新缓存
---force-refresh
-
-# 限制处理数量，适合测试
---limit 10
-
-# 修改生成报告的最低分，默认 60
---min-score 70
-
-# 所有股票都生成报告，包括低于 min-score 或未通过硬门槛的股票
---all-reports
+**macOS / Linux**
+```bash
+python -m screener.run_screener --tickers "NVDA,GOOGL,MSFT,AVGO"
+python -m screener.run_screener --tickers "600519.SS,300502.SZ,000651.SZ"
+python -m screener.run_screener --tickers "AAPL,MSFT,600519.SS,300502.SZ,NVDA"
 ```
 
-示例：
+终端会输出类似:
+```
+US 10Y: 4.46%   CN 10Y: 1.70%
 
-```powershell
-& "C:\Users\EDY\AppData\Local\Python\bin\python.exe" -m screener.run_screener --universe ndx100 --delay 3
-
-& "C:\Users\EDY\AppData\Local\Python\bin\python.exe" -m screener.run_screener --tickers ETN --all-reports
+[1/5] AAPL      → 56.0  ⭐
+[2/5] MSFT      → 68.0  ⭐⭐
+[3/5] 600519.SS → 68.0  ⭐⭐  贵州茅台
+...
 ```
 
 ---
 
-## 输出文件
+## 场景 3 — 跑整个股票池(NASDAQ 100 / S&P 500)
 
-运行后输出在：
+**Windows**
+```powershell
+python -m screener.run_screener --universe ndx100
+python -m screener.run_screener --universe sp500
+python -m screener.run_screener --universe both
+```
 
+**macOS / Linux**
+```bash
+python -m screener.run_screener --universe ndx100
+python -m screener.run_screener --universe sp500
+python -m screener.run_screener --universe both
+```
+
+常用参数:
 ```text
-reports/
+--delay 3            请求间隔秒数(默认 2,仅影响 cache miss 的请求)
+--force-refresh      忽略 SQLite 缓存强制刷新
+--limit 10           只跑前 N 只(测试用)
+--min-score 70       低于此分不生成单股报告(默认 60)
+--all-reports        即便未过硬门槛或分数低也生成报告(调试用)
 ```
 
-包括：
+---
 
-- `_summary_YYYY-MM-DD.csv` 或 `_summary_YYYY-MM-DD_HHMMSS.csv`：汇总 CSV，按分数降序。
-- `{分数}_{TICKER}_{公司名}.md`：单股 Markdown 报告，例如 `072.0_NVDA_NVIDIA_Corporation.md`。
+## 场景 4 — 跑沪深 300 前 N 大权重
 
-注意：
+入口:`run_csi300_top50.py`。它读取 `C:\Users\EDY\Downloads\000300closeweight.xls`(中证指数官网可下载),按权重排序后跑前 50 只。
 
-- 每次运行筛选器前，会清理旧的单股 `.md` 报告，避免不同批次结果混在一起。
-- 如果当天的 summary CSV 正被 Excel 或预览占用，程序会自动写一个带时间后缀的新 CSV。
-- `reports/` 是运行生成物，默认不建议提交到 Git。
+**Windows**
+```powershell
+python run_csi300_top50.py
+```
+
+**macOS / Linux**
+
+打开 `run_csi300_top50.py`,把顶部的 `XLS` 常量改成本机路径,然后:
+```bash
+python run_csi300_top50.py
+```
+
+雪球速度很快 — 50 只大约 45 秒。输出:
+- `reports/csi300_top50_scored.csv` — 总览表,带 `data_source` 列
+- `reports/{分数}_{代码}_{名称}.md` — 单股报告
 
 ---
 
-## 100 分系统怎么打分
+## 输出文件在哪
 
-总分 100 分，分成 6 组：
+所有脚本都写入 `reports/`:
 
-| 组别 | 名称 | 满分 | 关注点 |
-|---|---|---:|---|
-| A | Buffett 核心质量 | 35 | ROE、ROIC、利润率、FCF 质量、毛利率趋势 |
-| B | 财务稳健性 | 15 | 长债/净利润、D/E、利息保障倍数、流动比率 |
-| C | 成长性 | 15 | 净利润 CAGR、营收 CAGR、亏损年份、股本变化 |
-| D | 估值 | 20 | Forward PE、PEG、FCF Yield、P/FCF、E/P vs 10Y 国债 |
-| E | Munger 护城河 | 10 | 营业利润率水平、利润率稳定性、商誉/总资产 |
-| F | 技术参考 | 5 | 价格 vs 200 日均线、RSI |
+```
+reports/
+├── _summary_2026-05-13.csv         # 批次总览(按分数降序)
+├── 075.0_000651.SZ_格力电器.md      # 单股报告
+├── 072.0_NVDA_NVIDIA_Corporation.md
+└── ...
+```
 
-技术指标只占 5 分，因为它只用于择时参考，不应该主导价值判断。
+每份 Markdown 报告底部一行注明数据源,例如:
+```
+*数据源: 雪球 xueqiu.com (A股主源)*
+```
 
-### 硬门槛
-
-进入评分前会先做硬门槛过滤：
-
-- 市值大于 5 亿美元
-- ROE 平均值或当前值大于 8%
-- 最近年度净利润为正
-- D/E 不超过 3.0
-- 至少有 2 年历史财务数据
-- 近年亏损年份不能太多
-
-硬门槛不通过，默认不会生成单股报告；需要调试时可以加 `--all-reports`。
-
-### 评级解释
-
-| 分数 | 星级 | 含义 |
-|---:|---|---|
-| 90+ | 5 星 | 极少见的高质量机会，需要深度核实 |
-| 80-89 | 4 星 | 优质候选，值得优先研究 |
-| 70-79 | 3 星 | 良好，有亮点但仍有短板 |
-| 60-69 | 2 星 | 中等，谨慎评估 |
-| <60 | 1 星 | 一般，不作为优先研究对象 |
+`reports/*.md` 在每次 `screener.run_screener` 运行前会被清空,避免不同批次混在一起。`_summary_*.csv` 不会清。
 
 ---
 
-## 报告里有哪些内容
+## 100 分系统怎么算
 
-每份 Markdown 报告包括：
+总分 100 分,六组:
 
-- 总分、星级、行业、国家、价格、市值
-- 推荐理由：强项、短板、估值定位
-- 涨跌背景：
-  - YTD、近 1 年、近 3 年回报
-  - 距 52 周高位
-  - 近 3 年最大回撤
-  - 高分且大涨的“强势高分提醒”
-  - 高分但大跌的“可能原因”，无法判断时写“原因不详”
-- 公司简介：Yahoo Finance 英文原文
-- 评分明细：A-F 六组每个指标的分数和来源标签
-- 关键数据快照
-- 技术参考
-- 标签说明
+| 组 | 满分 | 关注点 |
+|---|---:|---|
+| A — Buffett 核心质量 | 35 | ROE、ROIC、各项利润率、FCF/净利润、毛利率趋势 |
+| B — 财务稳健性 | 15 | 长债/净利润、D/E、利息保障倍数、流动比率 |
+| C — 成长性 | 15 | 净利润 CAGR、营收 CAGR、亏损年份、股本变化 |
+| D — 估值 | 20 | Forward PE、PEG、FCF Yield、P/FCF、E/P vs 10Y 国债 |
+| E — Munger 护城河 | 10 | 营业利润率水平、利润率稳定性(CV)、商誉/总资产 |
+| F — 技术参考 | 5 | 价格 vs 200日均线、RSI |
 
----
+**硬门槛**(默认不通过不生成单股报告):
+- 市值 ≥ 5 亿美元(A 股 ≈ 35 亿人民币)
+- 4 年平均 ROE ≥ 8%
+- 最近年度净利润 > 0
+- D/E ≤ 3.0  *(银行结构性不通过,见下)*
+- 至少 2 年财务历史
+- 近期亏损年份 < 3
 
-## AI 影响怎么理解
-
-当前程序不会自动给出最终的 AI 正/负面结论，但报告会展示涨跌背景和新闻标题线索，方便你人工判断。
-
-一般可以这样理解：
-
-- AI 正面影响明显：AI 算力、半导体设备、AI 云、AI 广告效率、芯片设计工具。
-- AI 负面或替代风险：传统软件、IT 外包、人力服务、部分会计/税务/设计工作流。
-- AI 影响间接或不明确：电商、医疗器械、制药、平台型公司、工业服务。
-
-如果公司高分但大跌，尤其是软件公司，要重点确认是不是 AI 正在削弱商业模式或定价权。
-
-如果公司高分且近几年涨很多，也很有价值，因为这可能说明市场正在验证它的质量，而不是单纯“跌出来的便宜”。
+**ROE 用中国会计准则口径计算**:NI / 加权平均权益((期初+期末)/2),且分母用**归属母公司股东权益**(跟分子的归母净利润对齐口径)。这跟雪球/Wind 显示的一致。
 
 ---
 
-## 数据口径注意事项
+## A 股数据口径说明
 
-Yahoo Finance 对 ADR 或海外公司可能返回不同币种：
+- **主源选雪球**:它提供中国会计准则加权 ROE、完整三表、实时 PE/PB,一个 API 给齐。
+- **akshare(新浪/百度)兜底**:雪球失败(cookie 失效 / 限速)时自动启用。已知问题:新浪 `净资产收益率(ROE)` 字段偶有 bug(例如紫金矿业 2024 返回 21.66 而非真实的 25.89),BuffettLens **不信任**这个字段,ROE 始终从 NI/权益重算。
+- **银行/券商分数偏低**:D/E 用「计息债务/股东权益」,银行天然 10x+ 杠杆,被硬门槛拦下。不代表银行差,只是模型口径不适用。建议银行内部横向比较。
+- **真 FCF,不再用 OCF 近似**:雪球直接提供 `cash_paid_for_assets`,FCF = OCF − CapEx 是准的。
 
-- 股价/市值币种，例如 USD
-- 财报币种，例如 TWD
+---
 
-当两者币种不一致时，程序会避免计算 `FCF Yield` 和 `P/FCF`，防止把不同币种直接相除导致估值虚高。
+## 美股的币种边界情况
+
+ADR / 非美国公司 Yahoo 可能返回不一致的币种(股价 USD、财报 TWD)。BuffettLens 检测到币种不一致时,会跳过 `FCF Yield` 和 `P/FCF`,避免不同币种相除得出虚假便宜。
 
 ---
 
 ## 项目结构
 
-```text
+```
 BuffettLens/
-├── stock_info.py              # 日常单股/多股查询工具
-├── screener/                  # 100 分价值筛选系统
-│   ├── universe.py            # 股票池：NASDAQ 100 / S&P 500
-│   ├── fetcher.py             # yfinance 抓取 + SQLite 缓存
-│   ├── metrics.py             # 指标计算
-│   ├── scorer.py              # 100 分评分
-│   ├── reporter.py            # Markdown/CSV 报告
-│   └── run_screener.py        # CLI 主入口
-├── reports/                   # 运行后生成，默认不提交
+├── stock_info.py                # 美股单股查询 + 7 项简易评分
+├── run_csi300_top50.py          # 沪深300前N权重驱动脚本
+├── screener/
+│   ├── run_screener.py          # 主入口(支持混合输入)
+│   ├── fetcher.py               # 路由 + SQLite 缓存 + 国债收益率
+│   ├── xueqiu_fetcher.py        # 雪球 v5 客户端(A 股主源)
+│   ├── ashare_fetcher.py        # akshare 适配器(A 股兜底)
+│   ├── metrics.py               # 指标计算(加权 ROE、ROIC 等)
+│   ├── scorer.py                # 100 分评分 + 硬门槛
+│   ├── reporter.py              # Markdown + CSV 输出
+│   └── universe.py              # NDX100 / SP500 清单
+├── reports/                     # 运行生成(gitignore)
 ├── requirements.txt
 ├── README.md
 └── README_zh.md
@@ -250,14 +248,12 @@ BuffettLens/
 
 ## 常见问题
 
-### 为什么某只股票分数高但跌很多？
+**为什么高分股票跌很多?** 可能是估值压缩留下了安全边际,也可能是业务被永久削弱。报告里的"涨跌背景"会给提示,但不会下因果结论。
 
-可能是估值回落带来安全边际，也可能是业务被永久削弱。报告里的“涨跌背景”会提示可能原因；如果证据不足，会写“原因不详”。
+**为什么银行分数低?** D/E 硬门槛是按工业/科技校准的。银行 10x+ 杠杆是会计本质,模型口径不适用 — 银行该看 NIM、资本充足率、不良率。
 
-### 为什么某只股票涨很多但分数还高？
+**雪球被限速了怎么办?** 会自动回退到 akshare,终端显示 `→ 回退 akshare`。继续跑不打断。
 
-如果质量、增长、护城河仍然强，并且估值没有被模型完全判为过热，它仍可能高分。这类公司要重点看未来增长能否继续支撑估值。
+**ETN 这种好公司为啥分数低?** 多半是估值贵 — PE/PEG/FCF Yield 全部不满足价值门槛,D 组拉低总分。
 
-### 为什么 ETN 这种好公司分数低？
-
-可能不是公司差，而是估值贵。例如 Forward PE、PEG、FCF Yield、P/FCF 都不满足价值标准时，估值模块会拖低总分。
+**ROE 跟雪球对不上?** 旧版本用「NI/期末权益」,会系统性低估快速增长公司的 ROE。现版用「NI/加权平均归母权益」,与雪球完全一致。

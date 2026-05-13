@@ -332,7 +332,13 @@ def gen_report(m: Dict[str, Any], scoring: Dict[str, Any]) -> str:
     lines.append("- ❌🦬 技术参考 = Buffett 不依赖技术分析，因此只占 5 分")
     lines.append("")
     lines.append(f"*报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*  ")
-    lines.append("*数据源: Yahoo Finance via yfinance*")
+    _source = m.get("data_source") or "yfinance"
+    _src_label = {
+        "xueqiu": "雪球 xueqiu.com (A股主源)",
+        "akshare": "akshare → 新浪/百度 (A股兜底)",
+        "yfinance": "Yahoo Finance via yfinance (美/港股)",
+    }.get(_source, _source)
+    lines.append(f"*数据源: {_src_label}*")
     lines.append("")
 
     return "\n".join(lines)
