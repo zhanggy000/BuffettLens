@@ -123,6 +123,7 @@ python -m screener.run_screener --universe csi300
 python -m screener.run_screener --universe ndx100 sp500
 python -m screener.run_screener --universe ndx100 sp500 csi300
 python -m screener.run_screener --universe all
+python -m screener.run_screener --universe ndx100 --limit 50
 ```
 
 **macOS / Linux**
@@ -152,18 +153,20 @@ python -m screener.run_screener --universe all
 
 ## 场景 4 — 跑沪深 300 前 N 大权重
 
-入口:`run_csi300_top50.py`。它读取 `data/000300closeweight.xls`,按权重排序后跑前 50 只。
+入口:`run_csi300.py`。它读取 `data/000300closeweight.xls`,按权重排序后用 `--limit N` 跑前 N 只。
 
 **Windows**
 ```powershell
-python run_csi300_top50.py
+python run_csi300.py --limit 50
+python run_csi300.py --limit 80
 ```
 
 **macOS / Linux**
 
 在仓库根目录直接运行:
 ```bash
-python run_csi300_top50.py
+python run_csi300.py --limit 50
+python run_csi300.py --limit 80
 ```
 
 雪球速度很快 — 50 只大约 45 秒。输出:
@@ -238,7 +241,7 @@ ADR / 非美国公司 Yahoo 可能返回不一致的币种(股价 USD、财报 T
 ```
 BuffettLens/
 ├── stock_info.py                # 美股单股查询 + 7 项简易评分
-├── run_csi300_top50.py          # 沪深300前N权重驱动脚本
+├── run_csi300.py                # 沪深300前N权重驱动脚本
 ├── data/
 │   └── 000300closeweight.xls    # 沪深300成分权重文件
 ├── screener/

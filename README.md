@@ -121,6 +121,7 @@ python -m screener.run_screener --universe csi300
 python -m screener.run_screener --universe ndx100 sp500
 python -m screener.run_screener --universe ndx100 sp500 csi300
 python -m screener.run_screener --universe all
+python -m screener.run_screener --universe ndx100 --limit 50
 ```
 
 **macOS / Linux**
@@ -156,18 +157,20 @@ python -m screener.run_screener --universe csi300
 
 CSI 300 uses `data/000300closeweight.xls` by default. Optionally, set `CSI300_WEIGHT_XLS` to point at a different CSI 300 weight file for one run. If the Excel file is missing or unreadable, BuffettLens falls back to the hard-coded `CSI300_FALLBACK` ticker list.
 
-`run_csi300_top50.py` is kept as a legacy top-N helper. It reads `data/000300closeweight.xls` and scores the top 50 by weight.
+`run_csi300.py` is a convenience helper for top-N CSI 300 runs. It reads `data/000300closeweight.xls`, keeps index-weight order, and then applies `--limit N`.
 
 **Windows**
 ```powershell
-python run_csi300_top50.py
+python run_csi300.py --limit 50
+python run_csi300.py --limit 80
 ```
 
 **macOS / Linux**
 
-Run the same command from the repo root:
+Run the same commands from the repo root:
 ```bash
-python run_csi300_top50.py
+python run_csi300.py --limit 50
+python run_csi300.py --limit 80
 ```
 
 Snowball is fast: 50 stocks finish in ~45 seconds. Output:
@@ -242,7 +245,7 @@ For ADRs and non-US issuers, Yahoo may return market data in one currency (USD) 
 ```
 BuffettLens/
 ├── stock_info.py                # Quick US-stock fundamentals + 7-pt scorecard
-├── run_csi300_top50.py          # Top-N CSI 300 by weight driver
+├── run_csi300.py                # Top-N CSI 300 by weight driver
 ├── data/
 │   └── 000300closeweight.xls    # CSI 300 constituent weight file
 ├── screener/
