@@ -107,7 +107,86 @@ def write_csv(path: Path, rows: List[Dict[str, object]], fields: List[str]) -> N
 def fmt_pct(value: Optional[float]) -> str:
     if value is None:
         return "N/A"
+    if abs(value) < 0.0000005:
+        value = 0.0
     return f"{value * 100:.2f}%"
+
+
+def fmt_amount(value: object, currency: str) -> str:
+    try:
+        return f"{float(value):.2f} {currency}"
+    except (TypeError, ValueError):
+        return "N/A"
+
+
+def ensure_benchmark_positions(portfolio: Dict[str, object]) -> bool:
+    if portfolio.get("benchmark_positions"):
+        return False
+
+    start = to_date(str(portfolio["created_at"]))
+    initial_cash = float(portfolio["initial_cash"])
+    base_currency = str(portfolio.get("base_currency") or "USD").upper()
+    usd_fx_series = fetch_fx_series("USD", base_currency, start)
+    usd_fx = last_on_or_before(usd_fx_series, start, 1.0)
+    benchmark_positions = []
+    for ticker in portfolio.get("benchmarks") or ["SPY", "QQQ"]:
+        ticker = str(ticker).upper()
+        series = fetch_price_series(ticker, start)
+        buy_price = last_on_or_before(series, start, 0)
+        if buy_price <= 0:
+            progress(f"could not backfill benchmark position for {ticker}")
+            continue
+        shares = initial_cash / (buy_price * usd_fx) if usd_fx > 0 else 0
+        benchmark_positions.append({
+            "ticker": ticker,
+            "buy_date": start.isoformat(),
+            "buy_price": buy_price,
+            "price_currency": "USD",
+            "base_currency": base_currency,
+            "buy_fx_to_base": usd_fx,
+            "allocated_cash_base": initial_cash,
+            "shares": shares,
+        })
+        progress(f"backfilled benchmark {ticker}: {initial_cash:.2f} {base_currency} / {buy_price:.4f} USD = {shares:.6f} shares")
+
+    if not benchmark_positions:
+        return False
+    portfolio["benchmark_positions"] = benchmark_positions
+    return True
+
+
+def build_benchmark_result(
+    ticker: str,
+    day: date,
+    benchmark_positions: Dict[str, Dict[str, object]],
+    benchmark_series: Dict[str, pd.Series],
+    fx_series: Dict[str, pd.Series],
+    base_currency: str,
+    initial_cash: float,
+    start: date,
+) -> tuple[object, Optional[float]]:
+    benchmark_pos = benchmark_positions.get(ticker)
+    series = benchmark_series[ticker]
+    if benchmark_pos:
+        buy_price = float(benchmark_pos["buy_price"])
+        buy_fx = float(benchmark_pos.get("buy_fx_to_base") or 1.0)
+        shares = float(benchmark_pos["shares"])
+        allocated = float(benchmark_pos.get("allocated_cash_base") or initial_cash)
+        price_currency = str(benchmark_pos.get("price_currency") or "USD").upper()
+        price = buy_price if day <= start else last_on_or_before(series, day, buy_price)
+        fx_to_base = buy_fx if day <= start else last_on_or_before(
+            fx_series.get(price_currency, pd.Series(dtype=float)), day, buy_fx
+        )
+        value = shares * price * fx_to_base
+        benchmark_return = (value / allocated - 1) if allocated else None
+        return round(value, 2), benchmark_return
+
+    usd_fx = last_on_or_before(fx_series["USD"], day, 1.0)
+    base = last_on_or_before(series, start, 0) * last_on_or_before(fx_series["USD"], start, 1.0)
+    price = last_on_or_before(series, day, 0) * usd_fx
+    benchmark_return = (price / base - 1) if base > 0 else None
+    value = round(initial_cash * (1 + benchmark_return), 2) if benchmark_return is not None else ""
+    return value, benchmark_return
 
 
 def build_history(portfolio: Dict[str, object]) -> tuple[List[Dict[str, object]], List[Dict[str, object]]]:
@@ -115,6 +194,11 @@ def build_history(portfolio: Dict[str, object]) -> tuple[List[Dict[str, object]]
     initial_cash = float(portfolio["initial_cash"])
     base_currency = str(portfolio.get("base_currency") or "USD").upper()
     positions = list(portfolio["positions"])
+    benchmark_positions = {
+        str(pos["ticker"]).upper(): pos
+        for pos in list(portfolio.get("benchmark_positions") or [])
+        if pos.get("ticker")
+    }
 
     if date.today() <= start:
         progress("portfolio was created today; using buy prices and buy FX for the initial snapshot")
@@ -165,6 +249,10 @@ def build_history(portfolio: Dict[str, object]) -> tuple[List[Dict[str, object]]
     benchmarks = {"SPY": fetch_price_series("SPY", start), "QQQ": fetch_price_series("QQQ", start)}
     if "USD" not in fx_series:
         fx_series["USD"] = fetch_fx_series("USD", base_currency, start)
+    for pos in benchmark_positions.values():
+        price_currency = str(pos.get("price_currency") or "USD").upper()
+        if price_currency not in fx_series:
+            fx_series[price_currency] = fetch_fx_series(price_currency, base_currency, start)
     all_days = set()
     for series in list(price_series.values()) + list(benchmarks.values()) + list(fx_series.values()):
         all_days.update(series.index)
@@ -173,11 +261,6 @@ def build_history(portfolio: Dict[str, object]) -> tuple[List[Dict[str, object]]
         all_days.insert(0, start)
     if not all_days:
         all_days = [date.today()]
-
-    benchmark_bases = {}
-    for ticker, series in benchmarks.items():
-        base = last_on_or_before(series, start, 0) * last_on_or_before(fx_series["USD"], start, 1.0)
-        benchmark_bases[ticker] = base if base > 0 else None
 
     history = []
     latest_prices = {}
@@ -197,19 +280,20 @@ def build_history(portfolio: Dict[str, object]) -> tuple[List[Dict[str, object]]
             latest_prices[ticker] = price
 
         portfolio_return = (value / initial_cash) - 1 if initial_cash else None
-        usd_fx = last_on_or_before(fx_series["USD"], day, 1.0)
-        spy_price = last_on_or_before(benchmarks["SPY"], day, 0) * usd_fx
-        qqq_price = last_on_or_before(benchmarks["QQQ"], day, 0) * usd_fx
-        spy_return = (spy_price / benchmark_bases["SPY"] - 1) if benchmark_bases["SPY"] else None
-        qqq_return = (qqq_price / benchmark_bases["QQQ"] - 1) if benchmark_bases["QQQ"] else None
+        spy_value, spy_return = build_benchmark_result(
+            "SPY", day, benchmark_positions, benchmarks, fx_series, base_currency, initial_cash, start
+        )
+        qqq_value, qqq_return = build_benchmark_result(
+            "QQQ", day, benchmark_positions, benchmarks, fx_series, base_currency, initial_cash, start
+        )
 
         history.append({
             "date": day.isoformat(),
             "portfolio_value": round(value, 2),
             "portfolio_return": portfolio_return,
-            "spy_value": round(initial_cash * (1 + spy_return), 2) if spy_return is not None else "",
+            "spy_value": spy_value,
             "spy_return": spy_return,
-            "qqq_value": round(initial_cash * (1 + qqq_return), 2) if qqq_return is not None else "",
+            "qqq_value": qqq_value,
             "qqq_return": qqq_return,
             "excess_vs_spy": (portfolio_return - spy_return) if portfolio_return is not None and spy_return is not None else None,
             "excess_vs_qqq": (portfolio_return - qqq_return) if portfolio_return is not None and qqq_return is not None else None,
@@ -251,7 +335,9 @@ def write_latest(path: Path, portfolio: Dict[str, object], latest: Dict[str, obj
         f"- Initial cash: {float(portfolio['initial_cash']):.2f} {portfolio.get('base_currency') or 'USD'}",
         f"- Portfolio value: {latest['portfolio_value']:.2f} {portfolio.get('base_currency') or 'USD'}",
         f"- Portfolio return: {fmt_pct(latest['portfolio_return'])}",
+        f"- SPY value: {fmt_amount(latest['spy_value'], portfolio.get('base_currency') or 'USD')}",
         f"- SPY return: {fmt_pct(latest['spy_return'])}",
+        f"- QQQ value: {fmt_amount(latest['qqq_value'], portfolio.get('base_currency') or 'USD')}",
         f"- QQQ return: {fmt_pct(latest['qqq_return'])}",
         f"- Excess vs SPY: {fmt_pct(latest['excess_vs_spy'])}",
         f"- Excess vs QQQ: {fmt_pct(latest['excess_vs_qqq'])}",
@@ -291,6 +377,8 @@ def main() -> None:
         parser.error(f"portfolio.json not found: {portfolio_path}")
 
     portfolio = json.loads(portfolio_path.read_text(encoding="utf-8"))
+    if ensure_benchmark_positions(portfolio):
+        portfolio_path.write_text(json.dumps(portfolio, indent=2), encoding="utf-8")
     history, positions = build_history(portfolio)
     if not history:
         raise SystemExit("No price history available.")

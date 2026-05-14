@@ -76,6 +76,43 @@ def fetch_fx_to_base(price_currency: str, base_currency: str) -> float:
     raise RuntimeError(f"Could not fetch FX rate for {price_currency}->{base_currency}")
 
 
+def fetch_latest_price(ticker: str) -> tuple[float, str]:
+    """Return latest adjusted close and its date from Yahoo Finance."""
+    try:
+        hist = yf.Ticker(ticker).history(period="5d", auto_adjust=True)
+    except Exception:
+        hist = None
+    if hist is None or hist.empty or "Close" not in hist:
+        raise RuntimeError(f"Could not fetch benchmark price for {ticker}")
+    closes = hist["Close"].dropna()
+    if closes.empty:
+        raise RuntimeError(f"Could not fetch benchmark price for {ticker}")
+    latest = closes.iloc[-1]
+    latest_date = closes.index[-1].date().isoformat()
+    return float(latest), latest_date
+
+
+def build_benchmark_positions(benchmarks: List[str], cash: float, base_currency: str) -> List[Dict[str, object]]:
+    """Create one full-cash virtual benchmark investment for each benchmark."""
+    usd_fx_to_base = fetch_fx_to_base("USD", base_currency)
+    positions = []
+    for ticker in benchmarks:
+        price, price_date = fetch_latest_price(ticker)
+        shares = cash / (price * usd_fx_to_base) if price > 0 and usd_fx_to_base > 0 else 0
+        positions.append({
+            "ticker": ticker,
+            "buy_date": price_date,
+            "buy_price": price,
+            "price_currency": "USD",
+            "base_currency": base_currency,
+            "buy_fx_to_base": usd_fx_to_base,
+            "allocated_cash_base": cash,
+            "shares": shares,
+        })
+        progress(f"benchmark {ticker}: {cash:.2f} {base_currency} / {price:.4f} USD = {shares:.6f} shares")
+    return positions
+
+
 def select_candidates(rows: List[Dict[str, str]], min_score: float) -> List[Dict[str, str]]:
     selected = []
     for row in rows:
@@ -139,6 +176,23 @@ def write_report(path: Path, portfolio: Dict[str, object], positions: List[Dict[
             f"{p['buy_price']:.4f} | {p['buy_fx_to_base']:.6f} | {p['shares']:.6f} | "
             f"{p['allocated_cash_base']:.2f} | {p['weight'] * 100:.2f}% |"
         )
+    benchmark_positions = list(portfolio.get("benchmark_positions") or [])
+    if benchmark_positions:
+        lines.extend([
+            "",
+            "## Benchmark Investments",
+            "",
+            f"Each benchmark is simulated as a separate full-cash investment of {portfolio['initial_cash']:.2f} {portfolio['base_currency']}.",
+            "",
+            "| Benchmark | Buy Date | Price CCY | Buy Price | FX to Base | Shares | Allocated Base |",
+            "|---|---|---|---:|---:|---:|---:|",
+        ])
+        for b in benchmark_positions:
+            lines.append(
+                f"| {b['ticker']} | {b['buy_date']} | {b['price_currency']} | "
+                f"{float(b['buy_price']):.4f} | {float(b['buy_fx_to_base']):.6f} | "
+                f"{float(b['shares']):.6f} | {float(b['allocated_cash_base']):.2f} |"
+            )
     lines.append("")
     path.write_text("\n".join(lines), encoding="utf-8")
 
@@ -207,6 +261,9 @@ def main() -> None:
             "buy_date": created_at,
         })
 
+    benchmarks = ["SPY", "QQQ"]
+    benchmark_positions = build_benchmark_positions(benchmarks, args.cash, base_currency)
+
     portfolio = {
         "name": name,
         "created_at": created_at,
@@ -215,7 +272,8 @@ def main() -> None:
         "initial_cash": args.cash,
         "base_currency": base_currency,
         "method": args.method,
-        "benchmarks": ["SPY", "QQQ"],
+        "benchmarks": benchmarks,
+        "benchmark_positions": benchmark_positions,
         "positions": positions,
         "notes": "Simulated fractional-share portfolio. FX is converted to the base currency.",
     }
