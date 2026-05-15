@@ -16,6 +16,7 @@ A Python toolkit for value-investing screening across **US and A-share markets**
 | Batch-score a list of US tickers / NASDAQ 100 / S&P 500 / CSI 300 | `screener.run_screener` |
 | Batch-score **mixed US + A-share** tickers in one run | `screener.run_screener` |
 | Batch-score multiple universes together | `screener.run_screener --universe ndx100 sp500 csi300` |
+| Fetch the largest 30 US-listed companies and list scores >= 60 | `score_us_top30.py` |
 
 **Auto data routing** (you do nothing — the ticker format decides):
 
@@ -177,6 +178,28 @@ Snowball is fast: 50 stocks finish in ~45 seconds.
 
 ---
 
+## Scenario 5 — Largest 30 US-listed stocks
+
+`score_us_top30.py` is a dedicated root-level helper for the current US mega-cap screen. It first fetches candidate companies from a public market-cap ranking, then refreshes every stock through the existing project pipeline:
+
+```text
+screener.fetcher.fetch_stock(..., force_refresh=True)
+→ screener.metrics.compute_metrics(...)
+→ screener.scorer.score(...)
+```
+
+Run it from the repository root:
+
+```powershell
+python score_us_top30.py
+```
+
+The final table lists only companies with `BuffettLens` total score `>= 60`, sorted by the refreshed `market_cap` returned by the project fetcher. For ADRs and non-US issuers, Yahoo may use USD for market data and another currency for statements; the scoring logic skips `FCF Yield` and `P/FCF` when currencies differ.
+
+This helper does not replace or rename the normal entry points: `stock_info.py`, `screener.run_screener`, and `run_csi300.py` keep their existing usage.
+
+---
+
 ## Output files
 
 All scripts write into a new run folder under `reports/`. Existing reports are not deleted.
@@ -281,6 +304,7 @@ For ADRs and non-US issuers, Yahoo may return market data in one currency (USD) 
 ```
 BuffettLens/
 ├── stock_info.py                # Quick US-stock fundamentals + 7-pt scorecard
+├── score_us_top30.py            # Fetch US market-cap Top 30 and list scores >= 60
 ├── run_csi300.py                # Top-N CSI 300 by weight driver
 ├── data/
 │   └── 000300closeweight.xls    # CSI 300 constituent weight file

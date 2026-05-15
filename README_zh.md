@@ -14,6 +14,7 @@
 | 批量评分:自定义清单(美股 / A 股 / **混合**) | `screener.run_screener` | `python -m screener.run_screener --tickers ...` |
 | 批量评分:整个股票池(NASDAQ 100 / S&P 500 / CSI 300) | `screener.run_screener` | `python -m screener.run_screener --universe ndx100` |
 | 批量评分:多个股票池 | `screener.run_screener` | `python -m screener.run_screener --universe ndx100 sp500 csi300` |
+| 临时抓取美股市值 Top 30 并只列出 60 分以上 | `score_us_top30.py` | `python score_us_top30.py` |
 
 ## 数据源是自动选的
 
@@ -173,6 +174,28 @@ python run_csi300.py --limit 80
 
 ---
 
+## 场景 5 — 抓取美股市值 Top 30 并重新评分
+
+入口:`score_us_top30.py`。它会先从公开美股市值榜抓取候选名单,再用项目现有抓取管线强制刷新每只股票的数据:
+
+```text
+screener.fetcher.fetch_stock(..., force_refresh=True)
+→ screener.metrics.compute_metrics(...)
+→ screener.scorer.score(...)
+```
+
+运行:
+
+```powershell
+python score_us_top30.py
+```
+
+输出会先显示候选名单,然后重新拉取 yfinance 数据并评分。最终表格只列出 `BuffettLens` 总分 `>= 60` 的公司,并按项目抓取器刷新后的 `market_cap` 从大到小排序。ADR / 非美国公司可能出现财报币种和股价币种不同的情况;评分逻辑会跳过 `FCF Yield` 和 `P/FCF`,避免不同币种相除。
+
+这个脚本是根目录下的专用入口,不影响 `stock_info.py`、`screener.run_screener`、`run_csi300.py` 的原有用法和命名。
+
+---
+
 ## 输出文件在哪
 
 所有脚本都会在 `reports/` 下新建一个本次运行目录,不会清空旧报告:
@@ -276,6 +299,7 @@ ADR / 非美国公司 Yahoo 可能返回不一致的币种(股价 USD、财报 T
 ```
 BuffettLens/
 ├── stock_info.py                # 美股单股查询 + 7 项简易评分
+├── score_us_top30.py            # 抓取美股市值Top30并列出60分以上
 ├── run_csi300.py                # 沪深300前N权重驱动脚本
 ├── data/
 │   └── 000300closeweight.xls    # 沪深300成分权重文件
